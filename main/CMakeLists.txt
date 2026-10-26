@@ -1,5 +1,9 @@
 idf_component_register(
     SRCS "main.c"
+         "app_settings.c"
+         "app_audio.c"
+         "performance_metrics.c"
+         "performance_dashboard.c"
          "demo_navigation.c"
          "ui_pixel.c"
          "ui_pixel_math.c"
@@ -12,5 +16,6 @@ idf_component_register(
          "demo_ble.c"
          "demo_low_power.c"
     INCLUDE_DIRS "."
-    REQUIRES bsp bt esp_event esp_hw_support esp_netif esp_timer esp_wifi nvs_flash
+    REQUIRES bsp bt esp_event esp_hw_support esp_netif esp_timer esp_wifi
+             esp_system heap nvs_flash
 )

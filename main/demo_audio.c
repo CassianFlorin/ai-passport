@@ -4,6 +4,7 @@
 // does not validate this. See docs/hardware-design/AI_HARDWARE_DEVELOPMENT_GUIDE.md
 // section 8.1 before reusing this demo for continuous playback.
 #include "demo.h"
+#include "app_settings.h"
 #include "bsp_audio.h"
 #include "bsp_display.h"   // bsp_lvgl_lock / bsp_lvgl_unlock(音频任务里操作 LVGL 要加锁)
 #include "ui_pixel.h"
@@ -35,6 +36,12 @@ static TaskHandle_t s_task;
 static SemaphoreHandle_t s_stopped;
 static volatile bool s_cancel;
 
+// Apply the persistent speaker level at every playback boundary. Recording
+// still works while muted, so the setting controls output rather than input.
+static void apply_output_volume(void) {
+    bsp_audio_set_volume(app_settings_output_volume());
+}
+
 // LVGL 对象只能在持锁时操作;本函数从音频任务调用,故内部加锁。
 static void set_status(const char *text) {
     if (!bsp_lvgl_lock(500)) return;
@@ -45,7 +52,7 @@ static void set_status(const char *text) {
 static void play_tone(void) {
     set_status("playing 1kHz...");
     if (bsp_audio_set_format(SAMPLE_RATE, 16, 1) != ESP_OK) { set_status("format failed"); return; }
-    bsp_audio_set_volume(80);
+    apply_output_volume();
 
     int16_t *buf = malloc(CHUNK_SAMPLES * sizeof(int16_t));
     if (!buf) { set_status("out of memory"); return; }
@@ -96,7 +103,7 @@ static void record_and_play(void) {
 
     if (!s_cancel) {
         set_status("playing back...");
-        bsp_audio_set_volume(80);
+        apply_output_volume();
     }
     size_t played = 0;
     while (played < got && !s_cancel) {

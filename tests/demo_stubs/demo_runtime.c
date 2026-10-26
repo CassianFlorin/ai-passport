@@ -32,6 +32,10 @@ void lv_label_set_text(lv_obj_t *object, const char *text) {
 }
 void bsp_display_backlight(uint8_t percent) { (void)percent; }
 
+// Runtime tests can vary the effective speaker output independently of NVS.
+uint8_t test_audio_volume = 80, test_applied_volume;
+uint8_t app_settings_output_volume(void) { return test_audio_volume; }
+
 // Baseline-demo UI helpers (main/ui_pixel.c) and the LVGL calls they issue:
 // host tests never render, so these are link-only no-ops returning a shared
 // stub object. Upstream stubs lagged the demo's move onto ui_pixel_*; added
@@ -126,10 +130,11 @@ esp_err_t esp_deep_sleep_enable_gpio_wakeup(uint64_t gpio_pin_mask,
 }
 esp_err_t bsp_i2c_prepare_deep_sleep(void) { return ESP_OK; }
 esp_err_t bsp_display_prepare_deep_sleep(void) { return ESP_OK; }
+esp_err_t test_format_result = ESP_OK;
 esp_err_t bsp_audio_set_format(uint32_t hz, uint8_t bits, uint8_t channels) {
-    (void)hz; (void)bits; (void)channels; return ESP_OK;
+    (void)hz; (void)bits; (void)channels; return test_format_result;
 }
-void bsp_audio_set_volume(uint8_t percent) { (void)percent; }
+void bsp_audio_set_volume(uint8_t percent) { test_applied_volume = percent; }
 esp_err_t bsp_audio_read(void *pcm, size_t bytes) {
     test_read_calls++;
     if (test_read_hook) test_read_hook();

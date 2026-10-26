@@ -1,5 +1,6 @@
 #include "demo_stubs/demo_runtime.c"
 #include "../main/demo_audio.c"
+#include "../main/app_audio.c"
 
 static void cancel_recording(void) { s_cancel = true; }
 
@@ -48,6 +49,36 @@ int main(void) {
     record_and_play();
     assert(test_read_calls == 1 && test_write_calls == 0);
     assert(strncmp(test_status, "done.", 5) != 0);
+
+    // Every playback entry must honor effective volume, including mute.
+    test_read_hook = NULL;
+    s_cancel = false;
+    const uint8_t volumes[] = {0, 5, 65, 100};
+    for (unsigned i = 0; i < sizeof(volumes) / sizeof(volumes[0]); ++i) {
+        test_audio_volume = volumes[i];
+        test_applied_volume = 255;
+        test_write_calls = test_write_fail_at = 0;
+        play_tone();
+        assert(test_applied_volume == volumes[i] && test_write_calls > 0);
+        test_applied_volume = 255;
+        record_and_play();
+        assert(test_applied_volume == volumes[i]);
+    }
+
+    // A muted preview must not start the codec or send PCM. Preview failures
+    // propagate so the dashboard cannot report a successful sound test.
+    test_audio_volume = 0;
+    test_write_calls = 0;
+    test_format_result = ESP_FAIL;
+    assert(app_audio_preview() == ESP_OK && test_write_calls == 0);
+    test_audio_volume = 35;
+    assert(app_audio_preview() == ESP_FAIL && test_write_calls == 0);
+    test_format_result = ESP_OK;
+    test_write_fail_at = 1;
+    assert(app_audio_preview() == ESP_FAIL && test_write_calls == 1);
+    test_write_calls = test_write_fail_at = 0;
+    assert(app_audio_preview() == ESP_OK);
+    assert(test_applied_volume == 35 && test_write_calls == 20);
     puts("audio worker lifecycle and recording fault tests: PASS");
     return 0;
 }
