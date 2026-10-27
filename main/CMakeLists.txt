@@ -2,8 +2,20 @@ idf_component_register(
     SRCS "main.c"
          "app_settings.c"
          "app_audio.c"
+         "app_navigation.c"
+         "usb_config.c"
+         "usb_config_protocol.c"
+         "usb_config_storage.c"
          "performance_metrics.c"
-         "performance_dashboard.c"
+         "personal_home.c"
+         "../assets/images/cassian_portrait.c"
+         "../assets/fonts/cassian_display_28.c"
+         "../assets/fonts/cassian_ui_14.c"
+         "../assets/fonts/cassian_ui_18.c"
+         "../assets/fonts/cassian_ui_28.c"
+         "../assets/fonts/cassian_mono_12.c"
+         "../assets/fonts/cassian_mono_14.c"
+         "../assets/fonts/cassian_mono_32.c"
          "demo_navigation.c"
          "ui_pixel.c"
          "ui_pixel_math.c"
@@ -15,7 +27,7 @@ idf_component_register(
          "demo_wifi.c"
          "demo_ble.c"
          "demo_low_power.c"
-    INCLUDE_DIRS "."
+    INCLUDE_DIRS "." "../assets"
     REQUIRES bsp bt esp_event esp_hw_support esp_netif esp_timer esp_wifi
-             esp_system heap nvs_flash
+              esp_system heap nvs_flash esp_driver_usb_serial_jtag json
 )

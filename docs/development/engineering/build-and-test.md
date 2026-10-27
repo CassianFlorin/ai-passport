@@ -137,6 +137,10 @@ these debug bundles; runner-local archives disappear when the runner is removed.
 Any additional retention/upload policy needs an explicit content and access review.
 No build/archive command flashes a device.
 
+USB configuration host checks additionally require Node.js 20 or newer. They
+exercise the browser client against the actual C parser and use Python's
+standard library to check the loopback-only configuration page server.
+
 The static gate also compiles the actual BSP and demo implementations against
 small platform stubs. These fault-injection tests cover task handoff and stop
 retries, recording failures, Wi-Fi/BLE startup rollback, button allocation and

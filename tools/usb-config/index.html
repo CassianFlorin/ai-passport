@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <title>AI Passport · USB 配置</title>
+  <link rel="stylesheet" href="./style.css">
+  <script type="module" src="./app.mjs"></script>
+</head>
+<body>
+  <div class="workspace">
+    <aside class="sidebar">
+      <a class="brand" href="./" aria-label="AI Passport 配置首页"><span class="brand-mark" aria-hidden="true">P</span> AI PASSPORT</a>
+      <div class="sidebar-title"><span class="eyebrow">DEVICE WORKSPACE</span><h1>你的设备。<br>在电脑上设置。</h1><p>插上 USB，写入网络和 AI 服务配置。</p></div>
+      <ol class="steps" aria-label="配置步骤"><li class="current">连接设备<span>使用可传输数据的 USB 线</span></li><li>填写配置<span>键盘输入，也可以直接粘贴</span></li><li>保存到设备<span>断电后仍然保留</span></li></ol>
+      <div class="sidebar-foot"><span class="connection-dot" aria-hidden="true"></span> 本地页面 · USB 直连<p>配置内容由浏览器直接写入设备。</p></div>
+    </aside>
+    <main>
+      <header class="page-heading"><div><span class="eyebrow">USB CONFIGURATION / 01</span><h2>设备配置</h2></div><span id="connection-badge" class="badge">等待 USB 连接</span></header>
+      <div id="unsupported" class="notice warning" hidden>当前浏览器无法使用 USB 配置。请在电脑端 Chrome 或 Edge 中打开此地址，并允许访问串口。</div>
+      <section class="device-panel" aria-labelledby="device-heading">
+        <div class="device-art" aria-hidden="true"><div class="device-screen"><span>AI</span><i></i><b>PASSPORT</b></div><div class="device-keys"><i></i><i></i><i></i></div></div>
+        <div class="device-copy"><span class="eyebrow">YOUR PASSPORT</span><h3 id="device-heading">连接你的 AI Passport</h3><p id="device-description">设备还没连接 Wi-Fi？可以先通过 USB 完成配置。</p><div class="device-actions"><button id="connect" class="button primary" type="button">连接 USB 设备 <span aria-hidden="true">↗</span></button><button id="disconnect" class="button subtle" type="button" hidden>断开连接</button></div></div>
+      </section>
+      <div id="feedback" class="notice" role="status" aria-live="polite">连接时，请在浏览器弹窗中选择 USB JTAG/serial debug unit。</div>
+      <form id="configuration">
+        <fieldset id="fields" disabled>
+          <section class="settings-section" aria-labelledby="wifi-heading">
+            <div class="section-heading"><span class="section-number">01</span><div><h3 id="wifi-heading">Wi-Fi 网络</h3><p>选择 2.4 GHz 网络，设备会在保存后尝试连接。</p></div><button id="scan" class="button subtle" type="button">扫描附近网络</button></div>
+            <div class="form-grid">
+              <div class="field"><label for="ssid">网络名称</label><input id="ssid" name="ssid" list="networks" autocomplete="off" placeholder="选择或输入 Wi-Fi 名称"><datalist id="networks"></datalist><small>支持手动填写隐藏网络，最多 32 字节。</small></div>
+              <div class="field"><label for="password">Wi-Fi 密码 <span id="password-state" class="field-meta"></span></label><input id="password" name="password" type="password" autocomplete="new-password" placeholder="输入网络密码"><label class="checkbox"><input id="clear-password" type="checkbox"> 此网络不设密码／清除已保存密码</label></div>
+            </div>
+          </section>
+          <section class="settings-section" aria-labelledby="service-heading">
+            <div class="section-heading"><span class="section-number">02</span><div><h3 id="service-heading">AI 服务</h3><p>填写要连接的服务接口，支持 HTTP(S) 和 WS(S) 地址。</p></div></div>
+            <div class="field"><label for="service-url">服务地址</label><input id="service-url" name="service_url" type="text" inputmode="url" spellcheck="false" autocomplete="off" placeholder="wss://your-service.example/device"><small>请输入服务接口地址。AI 对话接入后将使用此配置；当前保存不会验证服务协议或认证。</small></div>
+            <div class="field token-field"><label for="token">设备令牌 / API Key <span id="token-state" class="field-meta"></span></label><input id="token" name="token" type="password" autocomplete="new-password" placeholder="粘贴服务提供的令牌"><label class="checkbox"><input id="clear-token" type="checkbox"> 清除已保存令牌</label></div>
+          </section>
+          <footer class="save-bar"><div><strong>保存到设备</strong><p>已保存的密码与令牌不会回显；留空会保留原值。</p></div><button id="save" class="button primary" type="submit">保存配置 <span aria-hidden="true">→</span></button></footer>
+        </fieldset>
+      </form>
+      <section class="connection-status" aria-label="设备网络状态"><div><span class="eyebrow">NETWORK STATUS</span><strong id="wifi-status">等待连接设备</strong></div><div><span class="eyebrow">DEVICE IP</span><strong id="ip-status">—</strong></div><button id="reconnect" class="button subtle" type="button" disabled>重新连接 Wi-Fi</button></section>
+      <p class="footnote">Wi-Fi 获取 IP 代表已连接路由器；互联网与 AI 服务状态需要分别验证。</p>
+    </main>
+  </div>
+</body>
+</html>

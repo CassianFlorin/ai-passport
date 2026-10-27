@@ -19,6 +19,7 @@ run_static_checks() {
     fi
 
     python3 tools/check_repo.py
+    python3 tools/check_cassian_fonts.py
 
     actionlint_bin="${ACTIONLINT_BIN:-}"
     if [[ -z "${actionlint_bin}" ]]; then
@@ -45,10 +46,29 @@ run_static_checks() {
         tests/test_performance_metrics.c main/performance_metrics.c \
         -o "${test_dir}/test_performance_metrics"
     "${test_dir}/test_performance_metrics"
+    "${CC:-cc}" -std=c11 -Wall -Wextra -Werror -Imain \
+        tests/test_app_navigation.c main/app_navigation.c \
+        -o "${test_dir}/test_app_navigation"
+    "${test_dir}/test_app_navigation"
     "${CC:-cc}" -std=c11 -Wall -Wextra -Werror \
         -Itests/settings_stubs -Itests/demo_stubs -Imain \
         tests/test_app_settings.c -o "${test_dir}/test_app_settings"
     "${test_dir}/test_app_settings"
+    "${CC:-cc}" -std=c11 -Wall -Wextra -Werror -Imain \
+        tests/test_usb_config_protocol.c main/usb_config_protocol.c \
+        -o "${test_dir}/test_usb_config_protocol"
+    "${test_dir}/test_usb_config_protocol"
+    "${CC:-cc}" -std=c11 -Wall -Wextra -Werror \
+        -Itests/usb_config_stubs -Itests/demo_stubs -Imain \
+        tests/test_usb_config_storage.c main/usb_config_storage.c main/usb_config_protocol.c \
+        -o "${test_dir}/test_usb_config_storage"
+    "${test_dir}/test_usb_config_storage"
+    "${CC:-cc}" -std=c11 -Wall -Wextra -Werror -Imain \
+        tests/usb_config_fixture.c main/usb_config_protocol.c \
+        -o "${test_dir}/usb_config_fixture"
+    PASSPORT_PROTOCOL_FIXTURE="${test_dir}/usb_config_fixture" \
+        node --test tests/test_usb_config_client.mjs
+    PYTHONDONTWRITEBYTECODE=1 python3 tests/test_usb_config_server.py
     "${CC:-cc}" -std=c11 -Wall -Wextra -Werror -Icomponents/bsp/src \
         tests/test_bsp_display_rounding.c components/bsp/src/bsp_display_rounding.c \
         -o "${test_dir}/test_bsp_display_rounding"

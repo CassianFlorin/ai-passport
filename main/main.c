@@ -1,6 +1,6 @@
-// main/main.c - Performance dashboard startup and serialized input worker.
+// main/main.c - Personal homepage startup and serialized input/telemetry worker.
 //
-// UP/DOWN: volume +/-5%; OK: mute/restore; hold OK: short sound preview.
+// Double OK opens the function list; long OK returns one level toward home.
 #include "bsp_i2c.h"
 #include "bsp_display.h"
 #include "bsp_button.h"
@@ -8,8 +8,9 @@
 #include "bsp_battery.h"
 #include "bsp_pins.h"      // 错误日志里要打印 BSP_LCD_* 引脚号
 #include "app_settings.h"
+#include "usb_config.h"
 #include "key_guard.h"
-#include "performance_dashboard.h"
+#include "personal_home.h"
 #include "esp_log.h"
 #include "esp_sleep.h"
 #include "esp_timer.h"
@@ -36,11 +37,11 @@ static void input_task(void *arg) {
     int64_t next_sample = 0;
     for (;;) {
         if (xQueueReceive(s_input_queue, &input, pdMS_TO_TICKS(100)) == pdTRUE) {
-            performance_dashboard_key(input.btn, input.event);
+            personal_home_key(input.btn, input.event);
         }
         int64_t now = esp_timer_get_time();
         if (now >= next_sample) {
-            performance_dashboard_refresh();
+            personal_home_refresh();
             next_sample = now + METRICS_INTERVAL_US;
         }
     }
@@ -88,7 +89,7 @@ static void on_key(bsp_btn_t btn, bsp_btn_ev_t ev, void *user) {
 }
 
 void app_main(void) {
-    ESP_LOGI(TAG, "AI Passport performance dashboard starting");
+    ESP_LOGI(TAG, "Cassian Florin personal homepage starting");
     const uint32_t wake_causes = esp_sleep_get_wakeup_causes();
     if (wake_causes & ~(1u << ESP_SLEEP_WAKEUP_UNDEFINED)) {
         ESP_LOGI(TAG, "休眠唤醒原因位图: 0x%02x", (unsigned)wake_causes);
@@ -102,9 +103,9 @@ void app_main(void) {
     bsp_i2c_init();
     bsp_i2c_scan();
 
-    // The dashboard requires a display; report pin details if startup fails.
+    // The homepage requires a display; report pin details if startup fails.
     if (bsp_display_init() != ESP_OK || !bsp_lvgl_init()) {
-        ESP_LOGE(TAG, "显示/LVGL 初始化失败,性能面板无法继续。"
+        ESP_LOGE(TAG, "显示/LVGL 初始化失败,个人首页无法继续。"
                       "检查 SPI 接线(MOSI=%d SCLK=%d CS=%d DC=%d BL=%d)",
                  BSP_LCD_MOSI, BSP_LCD_SCLK, BSP_LCD_CS, BSP_LCD_DC, BSP_LCD_BL);
         return;
@@ -121,12 +122,12 @@ void app_main(void) {
     bool battery_ready = bsp_battery_init() == ESP_OK;
 
     if (!bsp_lvgl_lock(1000)) {
-        ESP_LOGE(TAG, "Dashboard startup could not acquire LVGL lock");
+        ESP_LOGE(TAG, "Homepage startup could not acquire LVGL lock");
         return;
     }
     // The application boots straight into its own screen. Baseline hardware-test
     // demos remain as source references, with no path into their menu or pages.
-    performance_dashboard_create(audio_ready, settings_err == ESP_OK);
+    personal_home_create(audio_ready, settings_err == ESP_OK);
     bsp_lvgl_unlock();
 
     esp_err_t input_err = input_dispatch_init();
@@ -150,4 +151,9 @@ void app_main(void) {
     s_input_ready = input_err == ESP_OK && button_err == ESP_OK;
     ESP_LOGI(TAG, "就绪:Display=1 Button=%d Audio=%d Battery=%d",
              s_input_ready, audio_ready, battery_ready);
+    // Configuration and Wi-Fi work never run on the button or LVGL task.
+    esp_err_t usb_err = usb_config_start();
+    if (usb_err != ESP_OK) {
+        ESP_LOGW(TAG, "USB configuration unavailable: %s", esp_err_to_name(usb_err));
+    }
 }

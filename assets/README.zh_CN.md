@@ -15,6 +15,82 @@
 - 添加字库前评估 Flash 与内部 RAM 影响；ESP32-C3 无 PSRAM。
 - 不提交许可不允许分发的字库。
 
+### Cassian 首页
+
+- `fonts/geist-latin.woff2` 与 `fonts/instrument-serif-latin.woff2` 是从用户
+  `cassian-next-blog` 构建缓存取得的原始拉丁字体文件（2026-10-26），未作修改。
+  上游字族为 [Geist](https://github.com/vercel/geist-font) 和
+  [Instrument Serif](https://github.com/Instrument/instrument-serif)。
+  版权声明与 SIL Open Font License 1.1 保存在
+  [`fonts/OFL.txt`](fonts/OFL.txt)；生成子集同样遵循该许可。
+- `fonts/cassian_display_28.c` 为 Geist 600 字重、28 px、4 bpp 子集，
+  包含大写拉丁字母、数字、空格、`.`、`-` 与 `%`。
+  `fonts/cassian_editorial_18.c` 为 Instrument Serif 常规体、18 px、4 bpp
+  子集，覆盖 `CF`、`Building things.`、`Mapping ideas.`、
+  `Leaving traces.` 中的字母与标点。
+- `fonts/jetbrains-mono-latin.woff2` 是来自同一主站构建缓存的 JetBrains Mono
+  可变拉丁字体原文件，版本 2.211，未作修改。上游为
+  [JetBrains Mono](https://github.com/JetBrains/JetBrainsMono)；
+  版权声明与 SIL Open Font License 1.1 保存在
+  [`fonts/JetBrainsMono-OFL.txt`](fonts/JetBrainsMono-OFL.txt)。
+  `fonts/cassian_mono_12.c`、`fonts/cassian_mono_14.c` 与
+  `fonts/cassian_mono_32.c` 各含 95 个可打印 ASCII 字形，400 字重、
+  4 bpp，用于仪表标签与数值读数，位图合计占 21,228 字节 Flash。
+- [`../tools/generate_cassian_assets.py`](../tools/generate_cassian_assets.py)
+  将保留的源文件转换为 LVGL 9 未压缩字形位图与驻留 Flash 的 RGB565 肖像。
+  本次再生成使用 fontTools 4.63.0、sharp 0.33.5 及其内置 SVG 渲染器：
+
+  ```bash
+  python3 tools/generate_cassian_assets.py --sharp-module /path/to/node_modules/sharp
+  ```
+
+  编译生成的 C 文件不需要这些开发依赖。肖像含 72,576 字节 RGB565 像素。
+  当前中文应用链接 Geist、三份等宽字体子集和下述三份 UI 子集；
+  Instrument Serif 作为可复用资源保留，不参与链接。运行时仍使用 LVGL
+  常规的分块绘制缓冲与 32 KB 内存池，不另分配完整帧缓冲。原生渲染通过了
+  3,000 次页面切换，主机配置中内存池分配峰值为 18,840 字节；此结果不能
+  证明实机堆内存余量。实机中文显示、对比度与内存余量仍需板端确认。
+
+应用采用石墨色仪表布局，使用细网格、直线菜单边框、矢量图标、荧光绿
+选中态与等宽读数。个人主页保留山景肖像，双击 OK 打开独立功能列表。
+系统页仪表显示可用内存比例。设置页使用 20 段输出刻度，每段代表 5%，
+静音时全部熄灭。网格、图标与刻度由页面拥有的 LVGL 回调绘制，
+不为每条线或每段刻度创建对象，也不新增任务或计时器。预览遥测使用模拟
+数据，固件读数来自既有 BSP 与堆内存 API。
+
+### 简体中文界面
+
+- `fonts/cassian-ui-source.woff2` 是 Noto Sans SC 常规体 `2.004-H2`
+  的改名子集，源字体来自本机已安装的 `@larksuite/whiteboard-cli` 字体资源。
+  原始 TTF 的 SHA-256 为
+  `5cf8b2a0576d5680284ab03a7a8219499d59bbe981a79bb3dc0031f251c39736`。
+  仓库仅保留 20,528 字节的子集。版权声明与 SIL Open Font License 1.1
+  位于 [`fonts/NotoSansSC-OFL.txt`](fonts/NotoSansSC-OFL.txt)；字族改名为
+  Cassian UI，保留原始许可元数据。
+- `fonts/cassian-ui-characters.txt` 记录固定界面使用的 69 个非 ASCII 字符。
+  `fonts/cassian_ui_14.c` 和 `fonts/cassian_ui_18.c` 在此基础上包含可打印
+  ASCII，各有 164 个字形，分别为 14/18 px、4 bpp。
+  `fonts/cassian_ui_28.c` 仅包含大号静音状态使用的 U+9759、U+97F3。
+  它们是 LVGL 9 未压缩位图字库，不支持任意姓名或网络文本。未知字符不在
+  支持范围内；保留缺字占位符，避免缺字静默消失。
+- 转换脚本从 `main/personal_home.c` 中提取中文字符串。使用前述命令可以
+  从保留的源子集再生成。需要新增字符时，提供许可允许使用的完整源字体，
+  同时刷新源子集：
+
+  ```bash
+  python3 tools/generate_cassian_assets.py \
+    --sharp-module /path/to/node_modules/sharp \
+    --chinese-source /path/to/NotoSansSC-Regular.ttf
+  python3 tools/check_cassian_fonts.py
+  ```
+
+- 统一静态检查无需开发依赖，即可核对字符清单、各字库的覆盖范围、已知缺失
+  字符 U+9F98、位图边界与等宽字体的统一前进宽度。原生 LVGL 验证还会按
+  Unicode 码点解码每个标签的 UTF-8，检查实际选用字体、布局以及选中、静音
+  和报错状态，并统计音量刻度中点亮的段数。中文 UI 位图共占 26,522 字节
+  Flash，加上 Geist 与 JetBrains Mono 后，参与链接的字体位图共 54,229
+  字节。菜单图标与音量刻度采用 LVGL 绘图原语，不需要图片解码或图标字体回退。
+
 ## 图片（images）
 
 可复用的源图与生成的显示资产放在 `images/`。
@@ -25,6 +101,8 @@
 | [`images/readme-hardware-specs.png`](images/readme-hardware-specs.png) | 2172 × 724，PNG RGBA | 保留为可选技术参考图，不再用于首页主视觉。于 2026-09-17 使用内置图像生成工具为本仓库生成；已根据文档中的硬件能力契约核对图中的六项标签与参数。 |
 | [`images/logo-wordmark.png`](images/logo-wordmark.png) | 1648 × 336，PNG RGBA | 从仓库原始 `images/logo.png` 中精确裁切并去除背景的黑色字标；用于中英文项目 README 的浅色主题。 |
 | [`images/logo-wordmark-dark.png`](images/logo-wordmark-dark.png) | 1648 × 336，PNG RGBA | 提取字标的白色版本；README 使用 `<picture>` 在 GitHub 深色主题下显示。 |
+| [`images/cassian-avatar.png`](images/cassian-avatar.png) | 1024 × 1024，PNG | 取自 `cassianflorin.com` 本地源码的用户主站图像，按用户要求用于个人固件。原样保留，未提供单独的第三方再分发许可。 |
+| [`images/cassian_portrait.c`](images/cassian_portrait.c) | 216 × 168，RGB565 C 数组 | 上一图像按屏幕尺寸居中裁切的版本，由 Cassian 资源转换脚本生成，直接从 Flash 读取。 |
 
 - 使用描述性命名，并记录尺寸、像素格式、转换步骤与目标路径。
 - 优先采用适合 240 × 320 RGB565 显示的格式，并纳入 Flash 与内部 RAM 考量。
