@@ -6,6 +6,7 @@
 #include "app_audio.h"
 #include "app_navigation.h"
 #include "app_settings.h"
+#include "ai_conversation_state.h"
 #include "bsp_audio.h"
 #include "bsp_battery.h"
 #include "bsp_display.h"
@@ -13,6 +14,7 @@
 #include "esp_heap_caps.h"
 #include "esp_timer.h"
 #include "performance_metrics.h"
+#include "usb_config.h"
 
 enum {
     COLOR_BACKGROUND = 0x0B1115,
@@ -34,10 +36,10 @@ static lv_obj_t *s_scr;
 static lv_obj_t *s_body;
 static lv_obj_t *s_title;
 static lv_obj_t *s_battery;
-static lv_obj_t *s_menu_rows[2];
-static lv_obj_t *s_menu_labels[2];
-static lv_obj_t *s_menu_descriptions[2];
-static lv_obj_t *s_menu_icons[2];
+static lv_obj_t *s_menu_rows[APP_MENU_COUNT];
+static lv_obj_t *s_menu_labels[APP_MENU_COUNT];
+static lv_obj_t *s_menu_descriptions[APP_MENU_COUNT];
+static lv_obj_t *s_menu_icons[APP_MENU_COUNT];
 static lv_obj_t *s_menu_heap;
 static lv_obj_t *s_menu_volume;
 static lv_obj_t *s_menu_uptime;
@@ -52,6 +54,10 @@ static lv_obj_t *s_sound_value;
 static lv_obj_t *s_sound_state;
 static lv_obj_t *s_volume_bar;
 static lv_obj_t *s_sound_hint;
+static lv_obj_t *s_ai_wifi;
+static lv_obj_t *s_ai_service;
+static lv_obj_t *s_ai_hint;
+static usb_config_status_t s_connection;
 static app_navigation_t s_navigation;
 static bool s_audio_ready;
 static const char *s_feedback;
@@ -140,7 +146,7 @@ static lv_obj_t *create_bar(lv_obj_t *parent, int y)
 
 static void refresh_selection(void)
 {
-    for (unsigned i = 0; i < 2; ++i) {
+    for (unsigned i = 0; i < APP_MENU_COUNT; ++i) {
         bool selected = i == s_navigation.selection;
         lv_obj_set_style_bg_color(s_menu_rows[i],
                                   lv_color_hex(selected ? COLOR_SELECTED : COLOR_SURFACE), 0);
@@ -181,7 +187,20 @@ static void draw_menu_icon(lv_event_t *event)
     uint32_t color = lv_color_to_u32(lv_obj_get_style_text_color(icon, 0));
     const unsigned index = (unsigned)(uintptr_t)lv_event_get_user_data(event);
     const int x = area.x1, y = area.y1;
-    if (index == 0) {
+    if (index == APP_MENU_AI) {
+        // A speech bubble is a vector mark; no icon font or image decoder needed.
+        draw_line(layer, color, 1, x + 1, y + 3, x + 26, y + 3);
+        draw_line(layer, color, 1, x + 1, y + 3, x + 1, y + 21);
+        draw_line(layer, color, 1, x + 26, y + 3, x + 26, y + 21);
+        draw_line(layer, color, 1, x + 1, y + 21, x + 7, y + 21);
+        draw_line(layer, color, 1, x + 7, y + 21, x + 7, y + 27);
+        draw_line(layer, color, 1, x + 7, y + 27, x + 13, y + 21);
+        draw_line(layer, color, 1, x + 13, y + 21, x + 26, y + 21);
+        for (int i = 0; i < 3; ++i) {
+            draw_line(layer, color, 2, x + 7 + i * 6, y + 12,
+                       x + 8 + i * 6, y + 12);
+        }
+    } else if (index == APP_MENU_SYSTEM) {
         draw_line(layer, color, 1, x, y + 3, x + 27, y + 3);
         draw_line(layer, color, 1, x, y + 3, x, y + 24);
         draw_line(layer, color, 1, x + 27, y + 3, x + 27, y + 24);
@@ -204,44 +223,92 @@ static void draw_menu_icon(lv_event_t *event)
 static void build_menu(void)
 {
     create_label(s_body, "ESP32-C3", &cassian_mono_12, COLOR_MUTED, 12, 2, CONTENT_WIDTH);
-    const char *entries[] = { "系统状态", "设置" };
-    const char *descriptions[] = {
+    const char *entries[APP_MENU_COUNT] = { "AI 对话", "系统状态", "设置" };
+    const char *descriptions[APP_MENU_COUNT] = {
+        "尚未接入 / 查看配置",
         "内存 / 电量 / 运行",
         "音量 / 静音 / 试听",
     };
-    for (unsigned i = 0; i < 2; ++i) {
-        s_menu_rows[i] = create_panel(s_body, 12, 28 + 76 * (int)i,
-                                      CONTENT_WIDTH, 66, COLOR_SURFACE);
+    for (unsigned i = 0; i < APP_MENU_COUNT; ++i) {
+        s_menu_rows[i] = create_panel(s_body, 12, 24 + 64 * (int)i,
+                                      CONTENT_WIDTH, 58, COLOR_SURFACE);
         lv_obj_set_style_border_width(s_menu_rows[i], 1, 0);
         // Each vector icon is drawn by one owned object. Its callback disappears
         // with the row, and never keeps pointers to a deleted page.
         s_menu_icons[i] = lv_obj_create(s_menu_rows[i]);
         lv_obj_remove_style_all(s_menu_icons[i]);
-        lv_obj_set_pos(s_menu_icons[i], 12, 18);
+        lv_obj_set_pos(s_menu_icons[i], 12, 14);
         lv_obj_set_size(s_menu_icons[i], 28, 28);
         lv_obj_add_event_cb(s_menu_icons[i], draw_menu_icon, LV_EVENT_DRAW_MAIN,
                             (void *)(uintptr_t)i);
         s_menu_labels[i] = create_label(s_menu_rows[i], entries[i],
                                         &cassian_ui_18,
-                                        COLOR_INK, 54, 7, CONTENT_WIDTH - 66);
+                                        COLOR_INK, 54, 4, CONTENT_WIDTH - 66);
         s_menu_descriptions[i] = create_label(s_menu_rows[i], descriptions[i],
                                               &cassian_ui_14, COLOR_MUTED,
-                                              54, 35, CONTENT_WIDTH - 66);
+                                              54, 31, CONTENT_WIDTH - 66);
     }
-    create_panel(s_body, 12, 190, CONTENT_WIDTH, 1, COLOR_LINE);
-    create_label(s_body, "内存", &cassian_ui_14, COLOR_MUTED, 12, 202, 36);
+    create_panel(s_body, 12, 220, CONTENT_WIDTH, 1, COLOR_LINE);
     s_menu_heap = create_label(s_body, "--", &cassian_mono_12,
-                               COLOR_INK, 52, 205, 66);
-    create_label(s_body, "声音", &cassian_ui_14, COLOR_MUTED, 132, 202, 36);
+                               COLOR_INK, 12, 230, 70);
     s_menu_volume = create_label(s_body, "--", &cassian_mono_12,
-                                 COLOR_ACCENT, 174, 205, 54);
+                                 COLOR_ACCENT, 88, 230, 50);
     lv_obj_set_style_text_align(s_menu_volume, LV_TEXT_ALIGN_RIGHT, 0);
-    create_label(s_body, "运行", &cassian_ui_14, COLOR_MUTED, 12, 228, 36);
     s_menu_uptime = create_label(s_body, "--:--:--", &cassian_mono_12,
-                                 COLOR_INK, 52, 231, 176);
+                                 COLOR_INK, 150, 230, 78);
     lv_obj_set_style_text_align(s_menu_uptime, LV_TEXT_ALIGN_RIGHT, 0);
     lv_label_set_long_mode(s_menu_uptime, LV_LABEL_LONG_DOT);
     refresh_selection();
+}
+
+static void build_ai(void)
+{
+    create_label(s_body, "VOICE / AI", &cassian_mono_12,
+                 COLOR_MUTED, 12, 2, CONTENT_WIDTH);
+    lv_obj_t *notice = create_panel(s_body, 12, 26, CONTENT_WIDTH, 70, COLOR_SURFACE);
+    lv_obj_set_style_border_width(notice, 1, 0);
+    lv_obj_set_style_border_color(notice, lv_color_hex(COLOR_LINE), 0);
+    create_label(notice, "对话尚未接入", &cassian_ui_18, COLOR_WARM, 10, 8, 196);
+    create_label(notice, "暂不能开始录音", &cassian_ui_14, COLOR_MUTED, 10, 40, 196);
+    create_label(s_body, "Wi-Fi 网络", &cassian_ui_14, COLOR_MUTED, 12, 112, 110);
+    s_ai_wifi = create_label(s_body, "--", &cassian_ui_14, COLOR_INK, 128, 112, 100);
+    lv_obj_set_style_text_align(s_ai_wifi, LV_TEXT_ALIGN_RIGHT, 0);
+    create_label(s_body, "AI 服务", &cassian_ui_14, COLOR_MUTED, 12, 150, 110);
+    s_ai_service = create_label(s_body, "--", &cassian_ui_14, COLOR_INK, 128, 150, 100);
+    lv_obj_set_style_text_align(s_ai_service, LV_TEXT_ALIGN_RIGHT, 0);
+    create_panel(s_body, 12, 184, CONTENT_WIDTH, 1, COLOR_LINE);
+    s_ai_hint = create_label(s_body, "", &cassian_ui_14, COLOR_MUTED, 12, 200, CONTENT_WIDTH);
+}
+
+static void refresh_ai(void)
+{
+    const char *wifi = "未配置";
+    if (s_connection.transport_error) wifi = "不可用";
+    else if (!s_connection.ready) wifi = "读取中";
+    else if (s_connection.radio_error) wifi = "不可用";
+    else if (s_connection.wifi_state == USB_WIFI_CONNECTED) wifi = "已连接";
+    else if (s_connection.wifi_state == USB_WIFI_CONNECTING) wifi = "连接中";
+    else if (s_connection.wifi_state == USB_WIFI_RETRYING) wifi = "重试中";
+    else if (s_connection.wifi_state == USB_WIFI_ERROR) wifi = "不可用";
+    lv_label_set_text(s_ai_wifi, wifi);
+    // Saving an endpoint does not authenticate it or start a conversation.
+    lv_label_set_text(s_ai_service, s_connection.transport_error ? "不可用"
+                     : !s_connection.ready ? "读取中"
+                     : s_connection.storage_error ? "读取失败"
+                     : s_connection.service_configured ? "已保存" : "未配置");
+    const char *hint;
+    switch (ai_conversation_guidance(&s_connection)) {
+    case AI_GUIDANCE_STARTING: hint = "正在读取设备配置"; break;
+    case AI_GUIDANCE_USB_UNAVAILABLE: hint = "USB 配置不可用"; break;
+    case AI_GUIDANCE_STORAGE_ERROR: hint = "配置读取失败\n请用电脑 USB 重新保存"; break;
+    case AI_GUIDANCE_WIFI_REQUIRED: hint = "请用电脑 USB 配置网络"; break;
+    case AI_GUIDANCE_WIFI_ERROR: hint = "网络不可用\n请用电脑 USB 检查配置"; break;
+    case AI_GUIDANCE_WIFI_CONNECTING: hint = "正在连接 Wi-Fi"; break;
+    case AI_GUIDANCE_WIFI_RETRYING: hint = "网络连接失败\n请检查网络名称和密码"; break;
+    case AI_GUIDANCE_SERVICE_REQUIRED: hint = "请用电脑 USB 配置服务"; break;
+    default: hint = "服务地址已保存\n对话功能尚未接入"; break;
+    }
+    lv_label_set_text(s_ai_hint, hint);
 }
 
 static void create_metric_row(int y, const char *caption, lv_obj_t **value)
@@ -343,6 +410,8 @@ static void refresh_page(void)
             lv_label_set_text(s_menu_volume, "--");
         }
         lv_label_set_text(s_menu_uptime, s_metrics.uptime);
+    } else if (s_navigation.page == APP_PAGE_AI) {
+        refresh_ai();
     } else if (s_navigation.page == APP_PAGE_SYSTEM) {
         lv_label_set_text(s_heap_value, s_metrics.free);
         lv_label_set_text(s_largest_value, s_metrics.largest);
@@ -395,6 +464,10 @@ static void build_page(void)
     case APP_PAGE_MENU:
         title = "功能列表";
         build_menu();
+        break;
+    case APP_PAGE_AI:
+        title = "AI 对话";
+        build_ai();
         break;
     case APP_PAGE_SYSTEM:
         title = "系统状态";
@@ -463,6 +536,7 @@ void personal_home_refresh(void)
     // Battery reads can perform I2C; keep them outside the UI lock.
     s_metrics.soc = bsp_battery_soc();
     s_metrics.mv = bsp_battery_mv();
+    usb_config_get_status(&s_connection);
     if (!bsp_lvgl_lock(250)) return;
     refresh_page();
     bsp_lvgl_unlock();
@@ -485,6 +559,7 @@ void personal_home_key(bsp_btn_t btn, bsp_btn_ev_t ev)
     if (action == APP_ACTION_NONE) return;
 
     if (action == APP_ACTION_PAGE || action == APP_ACTION_SELECTION) {
+        usb_config_get_status(&s_connection);
         // Publish navigation only after obtaining the lock. On contention the
         // old screen and its button semantics must remain one consistent pair.
         if (!bsp_lvgl_lock(250)) return;

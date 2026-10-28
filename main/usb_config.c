@@ -38,6 +38,39 @@ static unsigned s_attempt;
 // stay on the worker. Release/acquire preserves the associated reason/IP value.
 static atomic_int s_link_event;
 static atomic_uint s_ip, s_disconnect_reason;
+static portMUX_TYPE s_status_lock = portMUX_INITIALIZER_UNLOCKED;
+static usb_config_status_t s_public_status;
+
+static void publish_status(bool ready, bool transport_error)
+{
+    usb_config_wifi_state_t wifi = USB_WIFI_UNCONFIGURED;
+    if (!strcmp(s_wifi_state, "connecting")) wifi = USB_WIFI_CONNECTING;
+    else if (!strcmp(s_wifi_state, "connected")) wifi = USB_WIFI_CONNECTED;
+    else if (!strcmp(s_wifi_state, "retrying")) wifi = USB_WIFI_RETRYING;
+    else if (!strcmp(s_wifi_state, "error")) wifi = USB_WIFI_ERROR;
+    const usb_config_status_t status = {
+        .ready = ready,
+        .transport_error = transport_error,
+        .storage_error = s_storage_error != ESP_OK,
+        .radio_error = s_radio_error != ESP_OK,
+        .wifi_configured = s_values.ssid[0] != '\0',
+        .service_configured = s_values.service_url[0] != '\0',
+        .wifi_state = wifi,
+    };
+    // The worker is the only settings owner. Publish a small value copy so the
+    // UI never races credential changes or holds a lock across Flash/radio work.
+    taskENTER_CRITICAL(&s_status_lock);
+    s_public_status = status;
+    taskEXIT_CRITICAL(&s_status_lock);
+}
+
+void usb_config_get_status(usb_config_status_t *status)
+{
+    if (!status) return;
+    taskENTER_CRITICAL(&s_status_lock);
+    *status = s_public_status;
+    taskEXIT_CRITICAL(&s_status_lock);
+}
 
 static void radio_event(void *arg, esp_event_base_t base, int32_t id, void *data)
 {
@@ -303,6 +336,7 @@ static void usb_worker(void *arg)
     (void)arg;
     s_storage_error = usb_config_storage_load(&s_values);
     if (s_values.ssid[0]) connect_wifi();
+    publish_status(true, false);
     ESP_LOGI(TAG, "USB configuration ready (protocol %u)", USB_CONFIG_VERSION);
     unsigned char bytes[64];
     for (;;) {
@@ -316,6 +350,7 @@ static void usb_worker(void *arg)
         }
         usb_config_clear(bytes, sizeof(bytes));
         network_tick();
+        publish_status(true, false);
     }
 }
 
@@ -327,12 +362,16 @@ esp_err_t usb_config_start(void)
         .rx_buffer_size = 3072,
     };
     esp_err_t err = usb_serial_jtag_driver_install(&config);
-    if (err != ESP_OK) return err;
+    if (err != ESP_OK) {
+        publish_status(false, true);
+        return err;
+    }
     usb_serial_jtag_vfs_use_driver();
     if (xTaskCreate(usb_worker, "usb_config", 6144, NULL, 3, &s_task) != pdPASS) {
         usb_serial_jtag_vfs_use_nonblocking();
         usb_serial_jtag_driver_uninstall();
         s_task = NULL;
+        publish_status(false, true);
         return ESP_ERR_NO_MEM;
     }
     return ESP_OK;

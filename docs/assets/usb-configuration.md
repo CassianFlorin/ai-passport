@@ -33,6 +33,27 @@ without this USB protocol will time out and display an update instruction.
 Opening the page does not open a serial port until the user selects a device.
 The device keeps its own redesigned homepage and three-button controls.
 
+## Device conversation entry
+
+Double-press OK on the homepage to open the function list. Its first entry is
+AI conversation, followed by system status and sound settings. UP/DOWN move
+one entry at a time without wrapping; click OK to open an entry and hold OK
+to return to the list. The selected entry is retained on return.
+
+The conversation page reports live Wi-Fi state and whether a service endpoint
+is stored. Its connection snapshot contains only public flags, never SSIDs,
+endpoints or credentials. The USB worker publishes it after processing settings
+and network events; the UI samples it without doing Flash or radio work while
+holding the LVGL lock.
+
+An endpoint is shown as saved, never as connected or authenticated. The page
+explicitly says that conversation is not integrated and recording cannot start.
+It provides USB setup guidance for missing configuration, connection retries,
+storage errors and unavailable USB/Wi-Fi. No button on this page records audio,
+sends requests or changes sound settings. Actual voice conversation still
+requires an implemented service protocol and independently verified audio and
+network behavior.
+
 ## Settings and limits
 
 | Setting | Limit and behavior |

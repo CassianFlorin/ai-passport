@@ -25,39 +25,46 @@ static void test_home_entry(void)
 static void test_function_list(void)
 {
     app_navigation_t nav = { .page = APP_PAGE_MENU };
+    const app_page_t pages[APP_MENU_COUNT] = {
+        APP_PAGE_AI, APP_PAGE_SYSTEM, APP_PAGE_SETTINGS,
+    };
 
     assert(app_navigation_handle(&nav, APP_KEY_UP, APP_GESTURE_CLICK) == APP_ACTION_NONE);
     assert(app_navigation_handle(&nav, APP_KEY_DOWN, APP_GESTURE_LONG) == APP_ACTION_NONE);
     assert(app_navigation_handle(&nav, APP_KEY_UP, APP_GESTURE_LONG) == APP_ACTION_NONE);
-    assert(app_navigation_handle(&nav, APP_KEY_DOWN, APP_GESTURE_CLICK) == APP_ACTION_SELECTION);
-    assert(nav.selection == 1 && nav.page == APP_PAGE_MENU);
-    assert(app_navigation_handle(&nav, APP_KEY_DOWN, APP_GESTURE_CLICK) == APP_ACTION_NONE);
-    assert(app_navigation_handle(&nav, APP_KEY_OK, APP_GESTURE_CLICK) == APP_ACTION_PAGE);
-    assert(nav.page == APP_PAGE_SETTINGS && nav.selection == 1);
-    assert(app_navigation_handle(&nav, APP_KEY_OK, APP_GESTURE_LONG) == APP_ACTION_PAGE);
-    assert(nav.page == APP_PAGE_MENU && nav.selection == 1);
-
-    assert(app_navigation_handle(&nav, APP_KEY_UP, APP_GESTURE_DOUBLE) == APP_ACTION_SELECTION);
-    assert(app_navigation_handle(&nav, APP_KEY_OK, APP_GESTURE_CLICK) == APP_ACTION_PAGE);
-    assert(nav.page == APP_PAGE_SYSTEM && nav.selection == 0);
-    // The metrics page has no shortcuts that bypass the function list.
-    for (app_key_t key = APP_KEY_UP; key <= APP_KEY_OK; ++key) {
-        assert(app_navigation_handle(&nav, key, APP_GESTURE_CLICK) == APP_ACTION_NONE);
-        assert(app_navigation_handle(&nav, key, APP_GESTURE_DOUBLE) == APP_ACTION_NONE);
+    for (unsigned i = 0; i < APP_MENU_COUNT; ++i) {
+        assert(nav.selection == i);
+        assert(app_navigation_handle(&nav, APP_KEY_OK, APP_GESTURE_DOUBLE) == APP_ACTION_NONE);
+        assert(app_navigation_handle(&nav, APP_KEY_OK, APP_GESTURE_CLICK) == APP_ACTION_PAGE);
+        assert(nav.page == pages[i] && nav.selection == i);
+        if (nav.page != APP_PAGE_SETTINGS) {
+            // AI/status pages cannot start recording or change sound settings.
+            for (app_key_t key = APP_KEY_UP; key <= APP_KEY_OK; ++key) {
+                assert(app_navigation_handle(&nav, key, APP_GESTURE_CLICK) == APP_ACTION_NONE);
+                assert(app_navigation_handle(&nav, key, APP_GESTURE_DOUBLE) == APP_ACTION_NONE);
+            }
+            assert(app_navigation_handle(&nav, APP_KEY_DOWN, APP_GESTURE_LONG) == APP_ACTION_NONE);
+        }
+        assert(app_navigation_handle(&nav, APP_KEY_OK, APP_GESTURE_LONG) == APP_ACTION_PAGE);
+        assert(nav.page == APP_PAGE_MENU && nav.selection == i);
+        assert(app_navigation_handle(&nav, APP_KEY_DOWN, APP_GESTURE_DOUBLE) ==
+               (i + 1 < APP_MENU_COUNT ? APP_ACTION_SELECTION : APP_ACTION_NONE));
     }
-    assert(app_navigation_handle(&nav, APP_KEY_DOWN, APP_GESTURE_LONG) == APP_ACTION_NONE);
+    assert(nav.selection == APP_MENU_SETTINGS);
+    assert(app_navigation_handle(&nav, APP_KEY_UP, APP_GESTURE_DOUBLE) == APP_ACTION_SELECTION);
+    assert(nav.selection == APP_MENU_SYSTEM);
+    assert(app_navigation_handle(&nav, APP_KEY_UP, APP_GESTURE_CLICK) == APP_ACTION_SELECTION);
+    assert(nav.selection == APP_MENU_AI);
+    assert(app_navigation_handle(&nav, APP_KEY_UP, APP_GESTURE_DOUBLE) == APP_ACTION_NONE);
     assert(app_navigation_handle(&nav, APP_KEY_OK, APP_GESTURE_LONG) == APP_ACTION_PAGE);
-    assert(nav.page == APP_PAGE_MENU && nav.selection == 0);
-    assert(app_navigation_handle(&nav, APP_KEY_DOWN, APP_GESTURE_DOUBLE) == APP_ACTION_SELECTION);
-    assert(app_navigation_handle(&nav, APP_KEY_OK, APP_GESTURE_LONG) == APP_ACTION_PAGE);
-    assert(nav.page == APP_PAGE_HOME && nav.selection == 1);
+    assert(nav.page == APP_PAGE_HOME && nav.selection == APP_MENU_AI);
     assert(app_navigation_handle(&nav, APP_KEY_OK, APP_GESTURE_DOUBLE) == APP_ACTION_PAGE);
-    assert(nav.page == APP_PAGE_MENU && nav.selection == 1);
+    assert(nav.page == APP_PAGE_MENU && nav.selection == APP_MENU_AI);
 }
 
 static void test_settings(void)
 {
-    app_navigation_t nav = { .page = APP_PAGE_SETTINGS, .selection = 1 };
+    app_navigation_t nav = { .page = APP_PAGE_SETTINGS, .selection = APP_MENU_SETTINGS };
 
     assert(app_navigation_handle(&nav, APP_KEY_UP, APP_GESTURE_CLICK) == APP_ACTION_VOLUME_UP);
     assert(app_navigation_handle(&nav, APP_KEY_UP, APP_GESTURE_DOUBLE) == APP_ACTION_VOLUME_UP);
@@ -68,7 +75,7 @@ static void test_settings(void)
     assert(app_navigation_handle(&nav, APP_KEY_DOWN, APP_GESTURE_LONG) == APP_ACTION_PREVIEW);
     assert(app_navigation_handle(&nav, APP_KEY_UP, APP_GESTURE_LONG) == APP_ACTION_NONE);
     assert(app_navigation_handle(&nav, APP_KEY_OK, APP_GESTURE_LONG) == APP_ACTION_PAGE);
-    assert(nav.page == APP_PAGE_MENU && nav.selection == 1);
+    assert(nav.page == APP_PAGE_MENU && nav.selection == APP_MENU_SETTINGS);
 }
 
 int main(void)
@@ -83,5 +90,8 @@ int main(void)
     assert(app_navigation_handle(0, APP_KEY_OK, APP_GESTURE_CLICK) == APP_ACTION_NONE);
     nav.page = (app_page_t)99;
     assert(app_navigation_handle(&nav, APP_KEY_OK, APP_GESTURE_LONG) == APP_ACTION_NONE);
+    nav.page = APP_PAGE_MENU;
+    nav.selection = APP_MENU_COUNT;
+    assert(app_navigation_handle(&nav, APP_KEY_OK, APP_GESTURE_CLICK) == APP_ACTION_NONE);
     return 0;
 }

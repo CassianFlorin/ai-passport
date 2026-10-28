@@ -3,6 +3,7 @@ idf_component_register(
          "app_settings.c"
          "app_audio.c"
          "app_navigation.c"
+         "ai_conversation_state.c"
          "usb_config.c"
          "usb_config_protocol.c"
          "usb_config_storage.c"

@@ -6,9 +6,17 @@
 typedef enum {
     APP_PAGE_HOME,
     APP_PAGE_MENU,
+    APP_PAGE_AI,
     APP_PAGE_SYSTEM,
     APP_PAGE_SETTINGS,
 } app_page_t;
+
+typedef enum {
+    APP_MENU_AI,
+    APP_MENU_SYSTEM,
+    APP_MENU_SETTINGS,
+    APP_MENU_COUNT,
+} app_menu_item_t;
 
 typedef enum {
     APP_KEY_UP,
@@ -34,7 +42,7 @@ typedef enum {
 
 typedef struct {
     app_page_t page;
-    uint8_t selection; // Function list: 0 = system, 1 = settings; kept on return.
+    uint8_t selection; // app_menu_item_t; retained when returning from a page.
 } app_navigation_t;
 
 app_action_t app_navigation_handle(app_navigation_t *state, app_key_t key,

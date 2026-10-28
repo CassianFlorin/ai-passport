@@ -7,7 +7,8 @@ app_action_t app_navigation_handle(app_navigation_t *state, app_key_t key,
 {
     if (!state || key < APP_KEY_UP || key > APP_KEY_OK ||
         gesture < APP_GESTURE_CLICK || gesture > APP_GESTURE_LONG ||
-        state->page < APP_PAGE_HOME || state->page > APP_PAGE_SETTINGS) {
+        state->page < APP_PAGE_HOME || state->page > APP_PAGE_SETTINGS ||
+        state->selection >= APP_MENU_COUNT) {
         return APP_ACTION_NONE;
     }
 
@@ -33,14 +34,21 @@ app_action_t app_navigation_handle(app_navigation_t *state, app_key_t key,
         return APP_ACTION_NONE;
     case APP_PAGE_MENU: {
         if (key == APP_KEY_OK) {
-            state->page = state->selection == 0 ? APP_PAGE_SYSTEM : APP_PAGE_SETTINGS;
+            static const app_page_t pages[APP_MENU_COUNT] = {
+                APP_PAGE_AI, APP_PAGE_SYSTEM, APP_PAGE_SETTINGS,
+            };
+            state->page = pages[state->selection];
             return APP_ACTION_PAGE;
         }
-        uint8_t next = key == APP_KEY_UP ? 0 : 1;
+        // Move one row per classified gesture and clamp at either end.
+        uint8_t next = state->selection;
+        if (key == APP_KEY_UP && next > 0) next--;
+        if (key == APP_KEY_DOWN && next + 1 < APP_MENU_COUNT) next++;
         if (next == state->selection) return APP_ACTION_NONE;
         state->selection = next;
         return APP_ACTION_SELECTION;
     }
+    case APP_PAGE_AI:
     case APP_PAGE_SYSTEM:
         return APP_ACTION_NONE;
     case APP_PAGE_SETTINGS:
