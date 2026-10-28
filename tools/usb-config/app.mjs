@@ -196,8 +196,17 @@ function status(state) {
   }
   $("ip-status").textContent = state.ip || "—";
 }
+// A datalist only suggests entries matching the typed text, so a saved SSID
+// hid every scan result. Scans fill a real select; "manual" reveals the input.
+function syncNetwork() {
+  const select = $("network-select");
+  const known = [...select.options].some((item) => item.value === $("ssid").value);
+  select.value = known && $("ssid").value ? $("ssid").value : CUSTOM_MODEL;
+  $("ssid").hidden = !select.hidden && select.value !== CUSTOM_MODEL;
+}
 function load(state) {
   $("ssid").value = state.ssid;
+  syncNetwork();
   $("service-url").value = state.service_url || "";
   for (const key of modelFields) $(fieldId(key)).value = state[key] || "";
   $("speech-url").value = state.speech_url || "";
@@ -228,6 +237,9 @@ function resetConnection() {
   $("wifi-status").textContent = "等待连接设备";
   $("ip-status").textContent = "—";
   $("password").value = $("token").value = $("speech-token").value = "";
+  $("network-select").replaceChildren();
+  $("network-select").hidden = true;
+  syncNetwork();
   controls();
 }
 async function operation(action) {
@@ -290,19 +302,31 @@ $("disconnect").addEventListener("click", () => operation(async () => {
 $("scan").addEventListener("click", () => operation(async () => {
   feedback("正在扫描附近的 2.4 GHz 网络…");
   const data = await client.request("scan");
-  $("networks").replaceChildren();
+  const select = $("network-select");
+  select.replaceChildren();
   const seen = new Set();
   for (const network of data.networks || []) {
     if (!network.ssid || seen.has(network.ssid)) continue;
     seen.add(network.ssid);
-    const option = document.createElement("option");
-    option.value = network.ssid;
-    option.label = `${network.rssi} dBm${network.open ? " · 开放网络" : ""}`;
-    $("networks").append(option);
+    select.append(option(network.ssid,
+      `${network.ssid} · ${network.rssi} dBm${network.open ? " · 开放网络" : ""}`));
   }
-  feedback(`找到 ${seen.size} 个网络。点击网络名称输入框选择，也可以手动填写。`, "success");
-  $("ssid").focus();
+  select.append(option(CUSTOM_MODEL, "手动输入其他网络…"));
+  select.hidden = false;
+  syncNetwork();
+  feedback(`找到 ${seen.size} 个网络。请在网络名称下拉框中选择，也可以手动输入。`, "success");
+  select.focus();
 }));
+$("network-select").addEventListener("change", (event) => {
+  const input = $("ssid");
+  if (event.target.value === CUSTOM_MODEL) {
+    input.hidden = false;
+    input.focus();
+  } else {
+    input.value = event.target.value;
+    input.hidden = true;
+  }
+});
 $("reconnect").addEventListener("click", () => operation(async () => {
   status(await client.request("reconnect"));
   feedback("已请求重新连接 Wi-Fi，网络状态会自动刷新。");

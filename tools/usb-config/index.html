@@ -29,7 +29,7 @@
           <section class="settings-section" aria-labelledby="wifi-heading">
             <div class="section-heading"><span class="section-number">01</span><div><h3 id="wifi-heading">Wi-Fi 网络</h3><p>选择 2.4 GHz 网络，设备会在保存后尝试连接。</p></div><button id="scan" class="button subtle" type="button">扫描附近网络</button></div>
             <div class="form-grid">
-              <div class="field"><label for="ssid">网络名称</label><input id="ssid" name="ssid" list="networks" autocomplete="off" placeholder="选择或输入 Wi-Fi 名称"><datalist id="networks"></datalist><small>支持手动填写隐藏网络，最多 32 字节。</small></div>
+              <div class="field"><label for="ssid">网络名称</label><select id="network-select" aria-label="扫描到的网络" hidden></select><input id="ssid" name="ssid" autocomplete="off" placeholder="输入 Wi-Fi 名称，或先扫描附近网络"><small>支持手动填写隐藏网络，最多 32 字节。</small></div>
               <div class="field"><label for="password">Wi-Fi 密码 <span id="password-state" class="field-meta"></span></label><input id="password" name="password" type="password" autocomplete="new-password" placeholder="输入网络密码"><label class="checkbox"><input id="clear-password" type="checkbox"> 此网络不设密码／清除已保存密码</label></div>
             </div>
           </section>
