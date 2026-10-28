@@ -180,21 +180,33 @@ void ai_page_refresh(const usb_config_status_t *connection)
         snprintf(title, sizeof(title), "正在朗读回复");
         snprintf(hint, sizeof(hint), "OK 停止朗读 · UP/DOWN 滚动");
         break;
-    case AI_STAGE_ERROR:
+    case AI_STAGE_ERROR: {
         accent = COLOR_ERROR;
+        // A 404 from the transcription endpoint usually means the configured
+        // service (often a chat-only provider) has no speech API at all.
+        bool no_asr = status.error == AI_ERROR_NOT_FOUND &&
+                      status.failed_stage != AI_STAGE_THINKING &&
+                      status.failed_stage != AI_STAGE_CONNECTING;
         snprintf(title, sizeof(title), "%s",
-                 status.failed_stage == AI_STAGE_THINKING ? "对话失败"
+                 no_asr ? "服务不支持语音识别"
+                 : status.failed_stage == AI_STAGE_THINKING ? "对话失败"
                  : status.failed_stage == AI_STAGE_CONNECTING ? "无法开始录音"
                  : "语音识别失败");
-        if (status.error == AI_ERROR_HTTP) {
+        if (no_asr) {
+            snprintf(hint, sizeof(hint), "或模型不存在 · OK 重试");
+        } else if (status.error == AI_ERROR_HTTP) {
             snprintf(hint, sizeof(hint), "服务返回 HTTP %d · OK 重试", status.http_status);
         } else {
             snprintf(hint, sizeof(hint), "%s · OK 重试", error_text(status.error));
         }
         break;
+    }
     case AI_STAGE_DONE:
         snprintf(title, sizeof(title), "按 OK 继续对话");
-        if (status.speech_error == AI_ERROR_HTTP) {
+        if (status.speech_error == AI_ERROR_NOT_FOUND) {
+            // The one-line hint fits about 14 glyphs; keep the cause visible.
+            snprintf(hint, sizeof(hint), "不支持语音合成或模型不存在");
+        } else if (status.speech_error == AI_ERROR_HTTP) {
             snprintf(hint, sizeof(hint), "语音播放失败：HTTP %d", status.http_status);
         } else if (status.speech_error != AI_ERROR_NONE) {
             snprintf(hint, sizeof(hint), "语音播放失败：%s", error_text(status.speech_error));
