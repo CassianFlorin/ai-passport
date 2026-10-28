@@ -220,12 +220,28 @@ static void draw_menu_icon(lv_event_t *event)
     }
 }
 
+// The menu row follows the same readiness rules as the AI page, so it never
+// claims a state the conversation itself would contradict.
+static const char *ai_menu_summary(void)
+{
+    switch (ai_conversation_guidance(&s_connection)) {
+    case AI_GUIDANCE_READY: return "已就绪 / 语音对话";
+    case AI_GUIDANCE_STARTING: return "读取配置中";
+    case AI_GUIDANCE_WIFI_REQUIRED: return "未配置 Wi-Fi";
+    case AI_GUIDANCE_WIFI_ERROR: return "Wi-Fi 不可用";
+    case AI_GUIDANCE_WIFI_CONNECTING: return "Wi-Fi 连接中";
+    case AI_GUIDANCE_WIFI_RETRYING: return "Wi-Fi 重试中";
+    case AI_GUIDANCE_SERVICE_REQUIRED: return "未配置 AI 服务";
+    default: return "配置读取失败";
+    }
+}
+
 static void build_menu(void)
 {
     create_label(s_body, "ESP32-C3", &cassian_mono_12, COLOR_MUTED, 12, 2, CONTENT_WIDTH);
     const char *entries[APP_MENU_COUNT] = { "AI 对话", "系统状态", "设置" };
     const char *descriptions[APP_MENU_COUNT] = {
-        "尚未接入 / 查看配置",
+        ai_menu_summary(),
         "内存 / 电量 / 运行",
         "音量 / 静音 / 试听",
     };
@@ -353,6 +369,7 @@ static void refresh_page(void)
 
     if (s_navigation.page == APP_PAGE_MENU) {
         refresh_selection();
+        lv_label_set_text(s_menu_descriptions[APP_MENU_AI], ai_menu_summary());
         lv_label_set_text(s_menu_heap, s_metrics.free);
         if (s_audio_ready) {
             lv_label_set_text_fmt(s_menu_volume, "%u%%", (unsigned)app_settings_output_volume());
