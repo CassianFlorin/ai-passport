@@ -143,7 +143,14 @@ bool usb_config_values_valid(const usb_config_values_t *values)
         !text_valid(values->password, sizeof(values->password)) ||
         !text_valid(values->service_url, sizeof(values->service_url)) ||
         !text_valid(values->service_token, sizeof(values->service_token)) ||
-        !url_valid(values->service_url)) return false;
+        !url_valid(values->service_url) ||
+        !text_valid(values->chat_model, sizeof(values->chat_model)) ||
+        !text_valid(values->asr_model, sizeof(values->asr_model)) ||
+        !text_valid(values->tts_model, sizeof(values->tts_model)) ||
+        !text_valid(values->tts_voice, sizeof(values->tts_voice)) ||
+        !text_valid(values->speech_url, sizeof(values->speech_url)) ||
+        !text_valid(values->speech_token, sizeof(values->speech_token)) ||
+        !url_valid(values->speech_url)) return false;
     size_t length = strlen(values->password);
     if (!values->ssid[0] && length) return false;
     if (length && length < 8) return false;
@@ -160,7 +167,7 @@ bool usb_config_parse(char *line, usb_config_request_t *request)
     memset(request, 0, sizeof(*request));
     size_t prefix_length = strlen(USB_CONFIG_PREFIX);
     if (strncmp(line, USB_CONFIG_PREFIX, prefix_length)) return false;
-    char *parts[7];
+    char *parts[13];
     size_t count = 0;
     char *field = line + prefix_length;
     for (;;) {
@@ -184,18 +191,52 @@ bool usb_config_parse(char *line, usb_config_request_t *request)
     else if (!strcmp(parts[1], "scan")) request->command = USB_CONFIG_SCAN;
     else if (!strcmp(parts[1], "reconnect")) request->command = USB_CONFIG_RECONNECT;
     else if (!strcmp(parts[1], "save")) request->command = USB_CONFIG_SAVE;
+    else if (!strcmp(parts[1], "models")) request->command = USB_CONFIG_MODELS;
     else return false;
+    if (request->command == USB_CONFIG_MODELS) {
+        if (count != 4) return false;
+        request->values.version = USB_CONFIG_VERSION;
+        request->keep_token = !strcmp(parts[3], "*");
+        return decode(parts[2], request->values.service_url,
+                      sizeof(request->values.service_url)) &&
+               request->values.service_url[0] &&
+               url_valid(request->values.service_url) &&
+               (request->keep_token || decode(parts[3], request->values.service_token,
+                                              sizeof(request->values.service_token))) &&
+               text_valid(request->values.service_token, sizeof(request->values.service_token));
+    }
     if (request->command != USB_CONFIG_SAVE) return count == 2;
-    if (count != 6) return false;
+    if (count != 12) return false;
     request->values.version = USB_CONFIG_VERSION;
     request->keep_password = !strcmp(parts[3], "*");
     request->keep_token = !strcmp(parts[5], "*");
+    request->keep_speech_token = !strcmp(parts[11], "*");
     return decode(parts[2], request->values.ssid, sizeof(request->values.ssid)) &&
            (request->keep_password || decode(parts[3], request->values.password,
                                              sizeof(request->values.password))) &&
            decode(parts[4], request->values.service_url, sizeof(request->values.service_url)) &&
            (request->keep_token || decode(parts[5], request->values.service_token,
-                                          sizeof(request->values.service_token)));
+                                          sizeof(request->values.service_token))) &&
+           decode(parts[6], request->values.chat_model, sizeof(request->values.chat_model)) &&
+           decode(parts[7], request->values.asr_model, sizeof(request->values.asr_model)) &&
+           decode(parts[8], request->values.tts_model, sizeof(request->values.tts_model)) &&
+           decode(parts[9], request->values.tts_voice, sizeof(request->values.tts_voice)) &&
+           decode(parts[10], request->values.speech_url, sizeof(request->values.speech_url)) &&
+           (request->keep_speech_token ||
+            decode(parts[11], request->values.speech_token,
+                   sizeof(request->values.speech_token)));
+}
+
+const char *usb_config_models_token(const usb_config_values_t *saved,
+                                    const usb_config_request_t *request)
+{
+    const char *url = request->values.service_url;
+    if (!request->keep_token) return request->values.service_token;
+    // A saved key goes only to the exact URL it was saved for; a page cannot
+    // redirect it to another host by naming a new URL with "*".
+    if (saved->speech_url[0] && !strcmp(url, saved->speech_url)) return saved->speech_token;
+    if (saved->service_url[0] && !strcmp(url, saved->service_url)) return saved->service_token;
+    return NULL;
 }
 
 const char *usb_config_apply(const usb_config_values_t *previous,
@@ -213,6 +254,10 @@ const char *usb_config_apply(const usb_config_values_t *previous,
     if (request->keep_token) {
         memcpy(candidate->service_token, previous->service_token,
                sizeof(candidate->service_token));
+    }
+    if (request->keep_speech_token) {
+        memcpy(candidate->speech_token, previous->speech_token,
+               sizeof(candidate->speech_token));
     }
     return usb_config_values_valid(candidate) ? NULL : "invalid_settings";
 }

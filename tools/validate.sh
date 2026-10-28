@@ -54,6 +54,10 @@ run_static_checks() {
         tests/test_ai_conversation_state.c main/ai_conversation_state.c \
         -o "${test_dir}/test_ai_conversation_state"
     "${test_dir}/test_ai_conversation_state"
+    "${CC:-cc}" -std=c11 -Wall -Wextra -Werror -Imain \
+        tests/test_ai_protocol.c main/ai_protocol.c \
+        -o "${test_dir}/test_ai_protocol"
+    "${test_dir}/test_ai_protocol"
     "${CC:-cc}" -std=c11 -Wall -Wextra -Werror \
         -Itests/settings_stubs -Itests/demo_stubs -Imain \
         tests/test_app_settings.c -o "${test_dir}/test_app_settings"

@@ -6,7 +6,9 @@
 #include "app_audio.h"
 #include "app_navigation.h"
 #include "app_settings.h"
+#include "ai_client.h"
 #include "ai_conversation_state.h"
+#include "ai_page.h"
 #include "bsp_audio.h"
 #include "bsp_battery.h"
 #include "bsp_display.h"
@@ -54,12 +56,10 @@ static lv_obj_t *s_sound_value;
 static lv_obj_t *s_sound_state;
 static lv_obj_t *s_volume_bar;
 static lv_obj_t *s_sound_hint;
-static lv_obj_t *s_ai_wifi;
-static lv_obj_t *s_ai_service;
-static lv_obj_t *s_ai_hint;
 static usb_config_status_t s_connection;
 static app_navigation_t s_navigation;
 static bool s_audio_ready;
+static uint32_t s_ai_revision;
 static const char *s_feedback;
 static bool s_feedback_error;
 
@@ -261,56 +261,6 @@ static void build_menu(void)
     refresh_selection();
 }
 
-static void build_ai(void)
-{
-    create_label(s_body, "VOICE / AI", &cassian_mono_12,
-                 COLOR_MUTED, 12, 2, CONTENT_WIDTH);
-    lv_obj_t *notice = create_panel(s_body, 12, 26, CONTENT_WIDTH, 70, COLOR_SURFACE);
-    lv_obj_set_style_border_width(notice, 1, 0);
-    lv_obj_set_style_border_color(notice, lv_color_hex(COLOR_LINE), 0);
-    create_label(notice, "对话尚未接入", &cassian_ui_18, COLOR_WARM, 10, 8, 196);
-    create_label(notice, "暂不能开始录音", &cassian_ui_14, COLOR_MUTED, 10, 40, 196);
-    create_label(s_body, "Wi-Fi 网络", &cassian_ui_14, COLOR_MUTED, 12, 112, 110);
-    s_ai_wifi = create_label(s_body, "--", &cassian_ui_14, COLOR_INK, 128, 112, 100);
-    lv_obj_set_style_text_align(s_ai_wifi, LV_TEXT_ALIGN_RIGHT, 0);
-    create_label(s_body, "AI 服务", &cassian_ui_14, COLOR_MUTED, 12, 150, 110);
-    s_ai_service = create_label(s_body, "--", &cassian_ui_14, COLOR_INK, 128, 150, 100);
-    lv_obj_set_style_text_align(s_ai_service, LV_TEXT_ALIGN_RIGHT, 0);
-    create_panel(s_body, 12, 184, CONTENT_WIDTH, 1, COLOR_LINE);
-    s_ai_hint = create_label(s_body, "", &cassian_ui_14, COLOR_MUTED, 12, 200, CONTENT_WIDTH);
-}
-
-static void refresh_ai(void)
-{
-    const char *wifi = "未配置";
-    if (s_connection.transport_error) wifi = "不可用";
-    else if (!s_connection.ready) wifi = "读取中";
-    else if (s_connection.radio_error) wifi = "不可用";
-    else if (s_connection.wifi_state == USB_WIFI_CONNECTED) wifi = "已连接";
-    else if (s_connection.wifi_state == USB_WIFI_CONNECTING) wifi = "连接中";
-    else if (s_connection.wifi_state == USB_WIFI_RETRYING) wifi = "重试中";
-    else if (s_connection.wifi_state == USB_WIFI_ERROR) wifi = "不可用";
-    lv_label_set_text(s_ai_wifi, wifi);
-    // Saving an endpoint does not authenticate it or start a conversation.
-    lv_label_set_text(s_ai_service, s_connection.transport_error ? "不可用"
-                     : !s_connection.ready ? "读取中"
-                     : s_connection.storage_error ? "读取失败"
-                     : s_connection.service_configured ? "已保存" : "未配置");
-    const char *hint;
-    switch (ai_conversation_guidance(&s_connection)) {
-    case AI_GUIDANCE_STARTING: hint = "正在读取设备配置"; break;
-    case AI_GUIDANCE_USB_UNAVAILABLE: hint = "USB 配置不可用"; break;
-    case AI_GUIDANCE_STORAGE_ERROR: hint = "配置读取失败\n请用电脑 USB 重新保存"; break;
-    case AI_GUIDANCE_WIFI_REQUIRED: hint = "请用电脑 USB 配置网络"; break;
-    case AI_GUIDANCE_WIFI_ERROR: hint = "网络不可用\n请用电脑 USB 检查配置"; break;
-    case AI_GUIDANCE_WIFI_CONNECTING: hint = "正在连接 Wi-Fi"; break;
-    case AI_GUIDANCE_WIFI_RETRYING: hint = "网络连接失败\n请检查网络名称和密码"; break;
-    case AI_GUIDANCE_SERVICE_REQUIRED: hint = "请用电脑 USB 配置服务"; break;
-    default: hint = "服务地址已保存\n对话功能尚未接入"; break;
-    }
-    lv_label_set_text(s_ai_hint, hint);
-}
-
 static void create_metric_row(int y, const char *caption, lv_obj_t **value)
 {
     lv_obj_t *card = create_panel(s_body, 12, y, CONTENT_WIDTH, 30, COLOR_BACKGROUND);
@@ -411,7 +361,8 @@ static void refresh_page(void)
         }
         lv_label_set_text(s_menu_uptime, s_metrics.uptime);
     } else if (s_navigation.page == APP_PAGE_AI) {
-        refresh_ai();
+        s_ai_revision = ai_client_revision();
+        ai_page_refresh(&s_connection);
     } else if (s_navigation.page == APP_PAGE_SYSTEM) {
         lv_label_set_text(s_heap_value, s_metrics.free);
         lv_label_set_text(s_largest_value, s_metrics.largest);
@@ -467,7 +418,7 @@ static void build_page(void)
         break;
     case APP_PAGE_AI:
         title = "AI 对话";
-        build_ai();
+        ai_page_build(s_body);
         break;
     case APP_PAGE_SYSTEM:
         title = "系统状态";
@@ -542,6 +493,34 @@ void personal_home_refresh(void)
     bsp_lvgl_unlock();
 }
 
+void personal_home_poll(void)
+{
+    // Conversation stages change faster than the one-second telemetry refresh.
+    if (s_navigation.page != APP_PAGE_AI || ai_client_revision() == s_ai_revision) return;
+    usb_config_get_status(&s_connection);
+    if (!bsp_lvgl_lock(250)) return;
+    refresh_page();
+    bsp_lvgl_unlock();
+}
+
+static void handle_ai(app_action_t action)
+{
+    if (action == APP_ACTION_AI_TALK) {
+        ai_client_status_t status;
+        ai_client_get_status(&status);
+        usb_config_get_status(&s_connection);
+        bool ready = ai_conversation_guidance(&s_connection) == AI_GUIDANCE_READY;
+        ai_client_command(ai_talk_command(status.stage, ready));
+    } else if (action == APP_ACTION_AI_RESET) {
+        (void)ai_client_reset();
+    }
+    if (!bsp_lvgl_lock(250)) return;
+    if (action == APP_ACTION_AI_SCROLL_UP) ai_page_scroll(1);
+    else if (action == APP_ACTION_AI_SCROLL_DOWN) ai_page_scroll(-1);
+    else refresh_page();
+    bsp_lvgl_unlock();
+}
+
 void personal_home_key(bsp_btn_t btn, bsp_btn_ev_t ev)
 {
     if (btn < BSP_BTN_UP || btn > BSP_BTN_OK) return;
@@ -563,10 +542,19 @@ void personal_home_key(bsp_btn_t btn, bsp_btn_ev_t ev)
         // Publish navigation only after obtaining the lock. On contention the
         // old screen and its button semantics must remain one consistent pair.
         if (!bsp_lvgl_lock(250)) return;
+        // A conversation belongs to its page; leaving stops the microphone,
+        // network request and speech before the widgets are deleted.
+        if (s_navigation.page == APP_PAGE_AI && next.page != APP_PAGE_AI) ai_client_cancel();
         s_navigation = next;
         if (action == APP_ACTION_PAGE) build_page();
         else refresh_selection();
         bsp_lvgl_unlock();
+        return;
+    }
+
+    if (action == APP_ACTION_AI_TALK || action == APP_ACTION_AI_RESET ||
+        action == APP_ACTION_AI_SCROLL_UP || action == APP_ACTION_AI_SCROLL_DOWN) {
+        handle_ai(action);
         return;
     }
 
@@ -575,7 +563,8 @@ void personal_home_key(bsp_btn_t btn, bsp_btn_ev_t ev)
     esp_err_t err;
     if (action == APP_ACTION_PREVIEW) {
         err = s_audio_ready ? app_audio_preview() : ESP_ERR_INVALID_STATE;
-        s_feedback = err != ESP_OK ? "试听失败"
+        s_feedback = err == ESP_ERR_TIMEOUT ? "对话中暂不能试听"
+                     : err != ESP_OK ? "试听失败"
                      : app_settings_sound_enabled() ? "试听完成" : "当前已静音";
         s_feedback_error = err != ESP_OK;
     } else {

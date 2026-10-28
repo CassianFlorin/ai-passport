@@ -37,8 +37,8 @@ static void test_function_list(void)
         assert(app_navigation_handle(&nav, APP_KEY_OK, APP_GESTURE_DOUBLE) == APP_ACTION_NONE);
         assert(app_navigation_handle(&nav, APP_KEY_OK, APP_GESTURE_CLICK) == APP_ACTION_PAGE);
         assert(nav.page == pages[i] && nav.selection == i);
-        if (nav.page != APP_PAGE_SETTINGS) {
-            // AI/status pages cannot start recording or change sound settings.
+        if (nav.page == APP_PAGE_SYSTEM) {
+            // The status page cannot start recording or change sound settings.
             for (app_key_t key = APP_KEY_UP; key <= APP_KEY_OK; ++key) {
                 assert(app_navigation_handle(&nav, key, APP_GESTURE_CLICK) == APP_ACTION_NONE);
                 assert(app_navigation_handle(&nav, key, APP_GESTURE_DOUBLE) == APP_ACTION_NONE);
@@ -62,6 +62,24 @@ static void test_function_list(void)
     assert(nav.page == APP_PAGE_MENU && nav.selection == APP_MENU_AI);
 }
 
+static void test_ai(void)
+{
+    app_navigation_t nav = { .page = APP_PAGE_AI, .selection = APP_MENU_AI };
+
+    assert(app_navigation_handle(&nav, APP_KEY_OK, APP_GESTURE_CLICK) == APP_ACTION_AI_TALK);
+    // OK double belongs to the homepage and must never start a recording.
+    assert(app_navigation_handle(&nav, APP_KEY_OK, APP_GESTURE_DOUBLE) == APP_ACTION_NONE);
+    assert(app_navigation_handle(&nav, APP_KEY_UP, APP_GESTURE_CLICK) == APP_ACTION_AI_SCROLL_UP);
+    assert(app_navigation_handle(&nav, APP_KEY_UP, APP_GESTURE_DOUBLE) == APP_ACTION_AI_SCROLL_UP);
+    assert(app_navigation_handle(&nav, APP_KEY_DOWN, APP_GESTURE_CLICK) ==
+           APP_ACTION_AI_SCROLL_DOWN);
+    assert(app_navigation_handle(&nav, APP_KEY_UP, APP_GESTURE_LONG) == APP_ACTION_AI_RESET);
+    assert(app_navigation_handle(&nav, APP_KEY_DOWN, APP_GESTURE_LONG) == APP_ACTION_NONE);
+    assert(nav.page == APP_PAGE_AI);
+    assert(app_navigation_handle(&nav, APP_KEY_OK, APP_GESTURE_LONG) == APP_ACTION_PAGE);
+    assert(nav.page == APP_PAGE_MENU && nav.selection == APP_MENU_AI);
+}
+
 static void test_settings(void)
 {
     app_navigation_t nav = { .page = APP_PAGE_SETTINGS, .selection = APP_MENU_SETTINGS };
@@ -82,6 +100,7 @@ int main(void)
 {
     test_home_entry();
     test_function_list();
+    test_ai();
     test_settings();
 
     app_navigation_t nav = {0};

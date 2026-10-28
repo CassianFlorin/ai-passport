@@ -38,6 +38,10 @@ typedef enum {
     APP_ACTION_VOLUME_DOWN,
     APP_ACTION_MUTE,
     APP_ACTION_PREVIEW,
+    APP_ACTION_AI_TALK,
+    APP_ACTION_AI_SCROLL_UP,
+    APP_ACTION_AI_SCROLL_DOWN,
+    APP_ACTION_AI_RESET,
 } app_action_t;
 
 typedef struct {

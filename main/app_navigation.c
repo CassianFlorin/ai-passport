@@ -25,6 +25,7 @@ app_action_t app_navigation_handle(app_navigation_t *state, app_key_t key,
             state->page = state->page == APP_PAGE_MENU ? APP_PAGE_HOME : APP_PAGE_MENU;
             return APP_ACTION_PAGE;
         }
+        if (state->page == APP_PAGE_AI && key == APP_KEY_UP) return APP_ACTION_AI_RESET;
         return state->page == APP_PAGE_SETTINGS && key == APP_KEY_DOWN
              ? APP_ACTION_PREVIEW : APP_ACTION_NONE;
     }
@@ -49,6 +50,9 @@ app_action_t app_navigation_handle(app_navigation_t *state, app_key_t key,
         return APP_ACTION_SELECTION;
     }
     case APP_PAGE_AI:
+        // OK advances the conversation; an OK double is ignored above.
+        return key == APP_KEY_UP ? APP_ACTION_AI_SCROLL_UP
+             : key == APP_KEY_DOWN ? APP_ACTION_AI_SCROLL_DOWN : APP_ACTION_AI_TALK;
     case APP_PAGE_SYSTEM:
         return APP_ACTION_NONE;
     case APP_PAGE_SETTINGS:

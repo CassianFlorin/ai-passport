@@ -88,6 +88,19 @@ const input = JSON.parse(fs.readFileSync(0, 'utf8'));
 """
 
 
+def chat_characters():
+    """Printable ASCII, every GB2312 character, and common typographic marks."""
+    characters = set(map(chr, range(32, 127)))
+    for code in range(0x80, 0x10000):
+        char = chr(code)
+        try:
+            if len(char.encode("gb2312")) == 2:
+                characters.add(char)
+        except UnicodeEncodeError:
+            pass
+    return "".join(sorted(characters | set("\u2014\u2013\u2026\u00b7\u201c\u201d\u2018\u2019")))
+
+
 def byte_array(data):
     return "\n".join(
         "    " + ", ".join(f"0x{value:02x}" for value in data[i:i + 16]) + ","
@@ -96,7 +109,8 @@ def byte_array(data):
 
 
 def prepare_font(filename, symbol, size, weight, characters):
-    font = TTFont(ROOT / "assets/fonts" / filename)
+    font = TTFont(Path(filename) if Path(filename).is_absolute()
+                  else ROOT / "assets/fonts" / filename)
     if weight is not None and "fvar" in font:
         font = instantiateVariableFont(font, {"wght": weight}, inplace=True)
     glyph_set = font.getGlyphSet()
@@ -195,17 +209,28 @@ def main():
                         help="sharp package name or installed module directory")
     parser.add_argument("--chinese-source", type=Path,
                         help="licensed full Noto Sans SC font for refreshing the retained subset")
+    parser.add_argument("--chat-source", type=Path,
+                        help="licensed full Noto Sans SC Regular; regenerates only "
+                             "the GB2312 conversation font")
     args = parser.parse_args()
+    if args.chat_source:
+        # The 16 MB source font is not committed. Generate the conversation font
+        # on its own so other assets do not change with the rasterizer version.
+        fonts = [prepare_font(str(args.chat_source.resolve()), "cassian_chat_14",
+                              14, None, chat_characters())]
+    else:
+        fonts = None
     chinese = chinese_inventory()
     characters = "".join(map(chr, range(32, 127))) + chinese
-    if args.chinese_source:
+    if args.chinese_source and not args.chat_source:
         retain_chinese_source(args.chinese_source, characters)
-    font_specs = FONT_SPECS + [
+    font_specs = [] if fonts else FONT_SPECS + [
         ("cassian-ui-source.woff2", "cassian_ui_14", 14, None, characters),
         ("cassian-ui-source.woff2", "cassian_ui_18", 18, None, characters),
         ("cassian-ui-source.woff2", "cassian_ui_28", 28, None, "\u9759\u97f3"),
     ]
-    fonts = [prepare_font(*spec) for spec in font_specs]
+    if not fonts:
+        fonts = [prepare_font(*spec) for spec in font_specs]
     jobs = [{"svg": glyph["svg"]} for font in fonts for glyph in font["glyphs"]
             if glyph["svg"] is not None]
     result = subprocess.run(
@@ -218,6 +243,8 @@ def main():
     rasters = iter(rasterized["glyphs"])
     for spec in fonts:
         write_font(spec, rasters)
+    if args.chat_source:
+        return
     (ROOT / "assets/fonts/cassian-ui-characters.txt").write_text(chinese + "\n")
 
     rgb = bytes.fromhex(rasterized["portrait"])

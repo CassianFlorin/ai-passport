@@ -47,3 +47,12 @@ CONFIG_BT_NIMBLE_ROLE_OBSERVER=n
 CONFIG_BT_NIMBLE_MAX_CONNECTIONS=1
 CONFIG_BT_NIMBLE_HOST_BASED_PRIVACY=n
 CONFIG_BT_NIMBLE_NVS_PERSIST=n
+
+# --- HTTPS for the cloud AI conversation ---
+# No PSRAM: allocate TLS record buffers only while needed and release the
+# handshake configuration and CA certificate after use. One connection exists
+# at a time; the default certificate bundle verifies public API endpoints.
+CONFIG_MBEDTLS_DYNAMIC_BUFFER=y
+CONFIG_MBEDTLS_DYNAMIC_FREE_CONFIG_DATA=y
+CONFIG_MBEDTLS_DYNAMIC_FREE_CA_CERT=y
+CONFIG_MBEDTLS_CERTIFICATE_BUNDLE=y

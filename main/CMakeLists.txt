@@ -4,6 +4,9 @@ idf_component_register(
          "app_audio.c"
          "app_navigation.c"
          "ai_conversation_state.c"
+         "ai_protocol.c"
+         "ai_client.c"
+         "ai_page.c"
          "usb_config.c"
          "usb_config_protocol.c"
          "usb_config_storage.c"
@@ -12,6 +15,7 @@ idf_component_register(
          "../assets/images/cassian_portrait.c"
          "../assets/fonts/cassian_display_28.c"
          "../assets/fonts/cassian_ui_14.c"
+         "../assets/fonts/cassian_chat_14.c"
          "../assets/fonts/cassian_ui_18.c"
          "../assets/fonts/cassian_ui_28.c"
          "../assets/fonts/cassian_mono_12.c"
@@ -31,4 +35,5 @@ idf_component_register(
     INCLUDE_DIRS "." "../assets"
     REQUIRES bsp bt esp_event esp_hw_support esp_netif esp_timer esp_wifi
               esp_system heap nvs_flash esp_driver_usb_serial_jtag json
+              esp_http_client mbedtls
 )

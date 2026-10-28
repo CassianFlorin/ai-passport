@@ -2,6 +2,7 @@
 #pragma once
 
 #include "esp_err.h"
+#include "usb_config_protocol.h"
 #include "usb_config_status.h"
 
 // Starts configuration transport even when stored settings or Wi-Fi are unavailable.
@@ -10,3 +11,8 @@ esp_err_t usb_config_start(void);
 
 // Copy a synchronized, secret-free snapshot. No Flash, radio, or USB I/O occurs.
 void usb_config_get_status(usb_config_status_t *status);
+
+// Copy the service endpoint, API key and model fields for one AI request.
+// Wi-Fi credentials are cleared from the copy. The caller must wipe it with
+// usb_config_clear() when done. Returns false before settings are loaded.
+bool usb_config_copy_service(usb_config_values_t *values);

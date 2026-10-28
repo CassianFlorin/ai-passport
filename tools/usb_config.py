@@ -11,7 +11,7 @@ import webbrowser
 
 PAGE_ROOT = Path(__file__).resolve().parent / "usb-config"
 ASSETS = {"/": "index.html", "/index.html": "index.html", "/style.css": "style.css",
-          "/app.mjs": "app.mjs", "/protocol.mjs": "protocol.mjs"}
+          "/app.mjs": "app.mjs", "/protocol.mjs": "protocol.mjs", "/models.mjs": "models.mjs"}
 
 
 class ConfigPageHandler(SimpleHTTPRequestHandler):

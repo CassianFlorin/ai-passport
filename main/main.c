@@ -1,13 +1,16 @@
 // main/main.c - Personal homepage startup and serialized input/telemetry worker.
 //
 // Double OK opens the function list; long OK returns one level toward home.
+// The worker also polls the AI conversation so its stages redraw promptly.
 #include "bsp_i2c.h"
 #include "bsp_display.h"
 #include "bsp_button.h"
 #include "bsp_audio.h"
 #include "bsp_battery.h"
 #include "bsp_pins.h"      // 错误日志里要打印 BSP_LCD_* 引脚号
+#include "app_audio.h"
 #include "app_settings.h"
+#include "ai_client.h"
 #include "usb_config.h"
 #include "key_guard.h"
 #include "personal_home.h"
@@ -39,6 +42,7 @@ static void input_task(void *arg) {
         if (xQueueReceive(s_input_queue, &input, pdMS_TO_TICKS(100)) == pdTRUE) {
             personal_home_key(input.btn, input.event);
         }
+        personal_home_poll();
         int64_t now = esp_timer_get_time();
         if (now >= next_sample) {
             personal_home_refresh();
@@ -117,7 +121,13 @@ void app_main(void) {
         ESP_LOGW(TAG, "声音设置读取失败,使用默认音量: %s",
                  esp_err_to_name(settings_err));
     }
-    bool audio_ready = bsp_audio_init() == ESP_OK;
+    // Both locks exist before the input worker can start a conversation.
+    esp_err_t lock_err = app_audio_init();
+    if (lock_err == ESP_OK) lock_err = ai_client_init();
+    if (lock_err != ESP_OK) {
+        ESP_LOGE(TAG, "AI conversation unavailable: %s", esp_err_to_name(lock_err));
+    }
+    bool audio_ready = lock_err == ESP_OK && bsp_audio_init() == ESP_OK;
     if (audio_ready) bsp_audio_set_volume(app_settings_output_volume());
     bool battery_ready = bsp_battery_init() == ESP_OK;
 

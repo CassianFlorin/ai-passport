@@ -3,6 +3,7 @@
 #include "usb_config_protocol.h"
 #include "usb_config_storage.h"
 #include "demo_radio.h"
+#include "ai_client.h"
 
 #include "cJSON.h"
 #include "driver/usb_serial_jtag.h"
@@ -16,8 +17,10 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 
+#include <inttypes.h>
 #include <stdatomic.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 #define SCAN_LIMIT 10
@@ -40,6 +43,30 @@ static atomic_int s_link_event;
 static atomic_uint s_ip, s_disconnect_reason;
 static portMUX_TYPE s_status_lock = portMUX_INITIALIZER_UNLOCKED;
 static usb_config_status_t s_public_status;
+// Guards replacement of s_values against copies made by the AI worker. Only the
+// USB worker writes s_values, so its own reads need no lock.
+static portMUX_TYPE s_values_lock = portMUX_INITIALIZER_UNLOCKED;
+static bool s_values_loaded;
+
+static void replace_values(const usb_config_values_t *values)
+{
+    taskENTER_CRITICAL(&s_values_lock);
+    s_values = *values;
+    s_values_loaded = true;
+    taskEXIT_CRITICAL(&s_values_lock);
+}
+
+bool usb_config_copy_service(usb_config_values_t *values)
+{
+    if (!values) return false;
+    taskENTER_CRITICAL(&s_values_lock);
+    bool loaded = s_values_loaded;
+    if (loaded) *values = s_values;
+    taskEXIT_CRITICAL(&s_values_lock);
+    usb_config_clear(values->ssid, sizeof(values->ssid));
+    usb_config_clear(values->password, sizeof(values->password));
+    return loaded;
+}
 
 static void publish_status(bool ready, bool transport_error)
 {
@@ -212,9 +239,15 @@ static cJSON *public_state(void)
     cJSON_AddNumberToObject(data, "protocol", USB_CONFIG_VERSION);
     cJSON_AddStringToObject(data, "ssid", s_values.ssid);
     cJSON_AddStringToObject(data, "service_url", s_values.service_url);
+    cJSON_AddStringToObject(data, "chat_model", s_values.chat_model);
+    cJSON_AddStringToObject(data, "asr_model", s_values.asr_model);
+    cJSON_AddStringToObject(data, "tts_model", s_values.tts_model);
+    cJSON_AddStringToObject(data, "tts_voice", s_values.tts_voice);
+    cJSON_AddStringToObject(data, "speech_url", s_values.speech_url);
     // Credentials are write-only: neither logs nor configuration reads expose them.
     cJSON_AddBoolToObject(data, "password_set", s_values.password[0] != '\0');
     cJSON_AddBoolToObject(data, "token_set", s_values.service_token[0] != '\0');
+    cJSON_AddBoolToObject(data, "speech_token_set", s_values.speech_token[0] != '\0');
     cJSON_AddStringToObject(data, "wifi_state", s_wifi_state);
     cJSON_AddStringToObject(data, "ip", ip);
     cJSON_AddNumberToObject(data, "disconnect_reason", atomic_load(&s_disconnect_reason));
@@ -245,6 +278,37 @@ static void reply(uint32_t id, cJSON *data, const char *error)
     } else {
         cJSON_Delete(data);
     }
+}
+
+// Runs on the model-fetch task. The JSON is assembled by hand because the
+// list can hold hundreds of IDs, more than cJSON can build in this heap.
+static void reply_models(uint32_t id, const char *models, bool truncated,
+                         const char *error, int status)
+{
+    flockfile(stdout);
+    if (models) {
+        printf(USB_CONFIG_PREFIX "{\"id\":%" PRIu32 ",\"ok\":true,\"data\":{\"models\":[%s],"
+               "\"truncated\":%s}}\n", id, models, truncated ? "true" : "false");
+    } else {
+        // error is one of a fixed set of plain identifiers.
+        printf(USB_CONFIG_PREFIX "{\"id\":%" PRIu32 ",\"ok\":false,\"error\":\"%s\","
+               "\"status\":%d}\n", id, error, status);
+    }
+    fflush(stdout);
+    funlockfile(stdout);
+}
+
+static void fetch_models(uint32_t id)
+{
+    const char *token = usb_config_models_token(&s_values, &s_request);
+    if (!token || !token[0]) {
+        reply(id, NULL, "key_required");
+    } else if (strcmp(s_wifi_state, "connected")) {
+        reply(id, NULL, "wifi_required");
+    } else if (!ai_client_fetch_models(id, s_request.values.service_url, token, reply_models)) {
+        reply(id, NULL, "busy");
+    }
+    // On success the fetch task replies; this worker keeps serving USB.
 }
 
 static void scan_wifi(uint32_t id)
@@ -293,8 +357,13 @@ static void handle_request(void)
         scan_wifi(s_request.id);
         return;
     }
+    if (s_request.command == USB_CONFIG_MODELS) {
+        fetch_models(s_request.id);
+        return;
+    }
     if (s_request.command == USB_CONFIG_SAVE) {
-        usb_config_values_t candidate;
+        // The worker owns this one static candidate; it is wiped after use.
+        static usb_config_values_t candidate;
         const char *error = usb_config_apply(&s_values, &s_request, &candidate);
         if (error) {
             reply(s_request.id, NULL, error);
@@ -306,7 +375,7 @@ static void handle_request(void)
                               s_storage_error != ESP_OK
                             ? usb_config_storage_save(&candidate) : ESP_OK;
             if (s_storage_error == ESP_OK) {
-                s_values = candidate;
+                replace_values(&candidate);
                 if (wifi_changed) {
                     s_attempt = 0;
                     // Finish the old station lifecycle before applying a new
@@ -334,7 +403,18 @@ static void handle_request(void)
 static void usb_worker(void *arg)
 {
     (void)arg;
-    s_storage_error = usb_config_storage_load(&s_values);
+    // Settings records are too large for this task's stack; copy via the heap.
+    usb_config_values_t *loaded = malloc(sizeof(*loaded));
+    if (loaded) {
+        *loaded = s_values;
+        s_storage_error = usb_config_storage_load(loaded);
+        replace_values(loaded);
+        usb_config_clear(loaded, sizeof(*loaded));
+        free(loaded);
+    } else {
+        s_storage_error = ESP_ERR_NO_MEM;
+        replace_values(&s_values);
+    }
     if (s_values.ssid[0]) connect_wifi();
     publish_status(true, false);
     ESP_LOGI(TAG, "USB configuration ready (protocol %u)", USB_CONFIG_VERSION);

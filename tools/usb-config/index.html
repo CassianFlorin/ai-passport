@@ -14,7 +14,7 @@
       <a class="brand" href="./" aria-label="AI Passport 配置首页"><span class="brand-mark" aria-hidden="true">P</span> AI PASSPORT</a>
       <div class="sidebar-title"><span class="eyebrow">DEVICE WORKSPACE</span><h1>你的设备。<br>在电脑上设置。</h1><p>插上 USB，写入网络和 AI 服务配置。</p></div>
       <ol class="steps" aria-label="配置步骤"><li class="current">连接设备<span>使用可传输数据的 USB 线</span></li><li>填写配置<span>键盘输入，也可以直接粘贴</span></li><li>保存到设备<span>断电后仍然保留</span></li></ol>
-      <div class="sidebar-foot"><span class="connection-dot" aria-hidden="true"></span> 本地页面 · USB 直连<p>配置内容由浏览器直接写入设备。</p></div>
+      <div class="sidebar-foot"><span class="connection-dot" aria-hidden="true"></span> USB 直连<p>配置和 API Key 只在浏览器与设备之间传递，不经过任何服务器。</p></div>
     </aside>
     <main>
       <header class="page-heading"><div><span class="eyebrow">USB CONFIGURATION / 01</span><h2>设备配置</h2></div><span id="connection-badge" class="badge">等待 USB 连接</span></header>
@@ -34,11 +34,23 @@
             </div>
           </section>
           <section class="settings-section" aria-labelledby="service-heading">
-            <div class="section-heading"><span class="section-number">02</span><div><h3 id="service-heading">AI 服务</h3><p>填写要连接的服务接口，支持 HTTP(S) 和 WS(S) 地址。</p></div></div>
-            <div class="field"><label for="service-url">服务地址</label><input id="service-url" name="service_url" type="text" inputmode="url" spellcheck="false" autocomplete="off" placeholder="wss://your-service.example/device"><small>请输入服务接口地址。AI 对话接入后将使用此配置；当前保存不会验证服务协议或认证。</small></div>
-            <div class="field token-field"><label for="token">设备令牌 / API Key <span id="token-state" class="field-meta"></span></label><input id="token" name="token" type="password" autocomplete="new-password" placeholder="粘贴服务提供的令牌"><label class="checkbox"><input id="clear-token" type="checkbox"> 清除已保存令牌</label></div>
+            <div class="section-heading"><span class="section-number">02</span><div><h3 id="service-heading">对话服务</h3><p>OpenAI 兼容接口的 Base URL 和 API Key，例如 DeepSeek、OpenAI。</p></div><button id="fetch-models" class="button subtle" type="button">获取模型列表</button></div>
+            <div class="field"><label for="service-url">Base URL</label><input id="service-url" name="service_url" type="text" inputmode="url" spellcheck="false" autocomplete="off" placeholder="https://api.deepseek.com/v1"><small>只支持 http:// 或 https://。设备会在后面拼接 /chat/completions。</small></div>
+            <div class="field token-field"><label for="token">API Key <span id="token-state" class="field-meta"></span></label><input id="token" name="token" type="password" autocomplete="new-password" placeholder="粘贴服务提供的 API Key"><label class="checkbox"><input id="clear-token" type="checkbox"> 清除已保存的 API Key</label></div>
+            <div class="field"><label for="chat-model">对话模型</label><select id="chat-model-select" hidden></select><input id="chat-model" name="chat_model" spellcheck="false" autocomplete="off" placeholder="gpt-4o-mini"><small id="chat-model-status">设备连上 Wi-Fi 后，会用这里的 Base URL 和 API Key 获取模型列表，并默认选中第一个推荐模型。</small></div>
           </section>
-          <footer class="save-bar"><div><strong>保存到设备</strong><p>已保存的密码与令牌不会回显；留空会保留原值。</p></div><button id="save" class="button primary" type="submit">保存配置 <span aria-hidden="true">→</span></button></footer>
+          <section class="settings-section" aria-labelledby="speech-heading">
+            <div class="section-heading"><span class="section-number">03</span><div><h3 id="speech-heading">语音服务</h3><p>语音识别和语音合成。对话服务没有语音接口（如 DeepSeek）时，填写另一家服务，例如硅基流动或 OpenAI。</p></div></div>
+            <div class="field"><label for="speech-url">Base URL <span class="field-meta">可选</span></label><input id="speech-url" name="speech_url" type="text" inputmode="url" spellcheck="false" autocomplete="off" placeholder="留空则使用对话服务"><small>设备会在后面拼接 /audio/transcriptions 和 /audio/speech。留空时语音也使用对话服务的地址和 API Key。</small></div>
+            <div class="field token-field"><label for="speech-token">API Key <span id="speech-token-state" class="field-meta"></span></label><input id="speech-token" name="speech_token" type="password" autocomplete="new-password" placeholder="粘贴语音服务的 API Key"><label class="checkbox"><input id="clear-speech-token" type="checkbox"> 清除已保存的语音服务 API Key</label></div>
+            <div class="form-grid">
+              <div class="field"><label for="asr-model">语音识别模型</label><select id="asr-model-select" hidden></select><input id="asr-model" name="asr_model" spellcheck="false" autocomplete="off" placeholder="whisper-1"></div>
+              <div class="field"><label for="tts-model">语音合成模型</label><select id="tts-model-select" hidden></select><input id="tts-model" name="tts_model" spellcheck="false" autocomplete="off" placeholder="tts-1"></div>
+            </div>
+            <div class="field"><label for="tts-voice">音色</label><input id="tts-voice" name="tts_voice" list="voices" spellcheck="false" autocomplete="off" placeholder="alloy"><datalist id="voices"></datalist><small>可从常用音色中选择，也可以填写服务支持的其他音色。</small></div>
+            <small id="speech-model-status" class="section-status">填写后会自动获取语音服务的模型。</small>
+          </section>
+          <footer class="save-bar"><div><strong>保存到设备</strong><p>已保存的密码与 API Key 不会回显；留空会保留原值。</p></div><button id="save" class="button primary" type="submit">保存配置 <span aria-hidden="true">→</span></button></footer>
         </fieldset>
       </form>
       <section class="connection-status" aria-label="设备网络状态"><div><span class="eyebrow">NETWORK STATUS</span><strong id="wifi-status">等待连接设备</strong></div><div><span class="eyebrow">DEVICE IP</span><strong id="ip-status">—</strong></div><button id="reconnect" class="button subtle" type="button" disabled>重新连接 Wi-Fi</button></section>

@@ -3,6 +3,7 @@ import { spawn } from "node:child_process";
 import { once } from "node:events";
 import test from "node:test";
 import { ConfigurationClient, encodeRequest, PREFIX } from "../tools/usb-config/protocol.mjs";
+import { groupModels } from "../tools/usb-config/models.mjs";
 
 class SerialPeer {
   constructor() {
@@ -43,7 +44,7 @@ const fixture = async (options) => {
   const peer = new SerialPeer();
   const client = new ConfigurationClient(options);
   const state = await client.connect(peer);
-  assert.equal(state.protocol, 1);
+  assert.equal(state.protocol, 3);
   return { peer, client };
 };
 
@@ -52,10 +53,18 @@ test("browser frames interoperate with the real C parser, including UTF-8 and se
   try {
     const saved = await client.request("save", {
       ssid: "Lab \u5bb6", password: "sample-password",
-      service_url: "wss://service.example/voice", service_token: "sample-token",
+      service_url: "https://service.example/v1", service_token: "sample-token",
+      chat_model: " deepseek-chat ", tts_voice: "alloy",
+      speech_url: " https://api.siliconflow.cn/v1 ", speech_token: "speech-secret",
     });
     assert.equal(saved.ssid, "Lab \u5bb6");
     assert.equal(saved.password_set, true);
+    assert.equal(saved.chat_model, "deepseek-chat");
+    assert.equal(saved.asr_model, "");
+    assert.equal(saved.tts_voice, "alloy");
+    assert.equal(saved.speech_url, "https://api.siliconflow.cn/v1");
+    assert.equal(saved.speech_token_set, true);
+    assert.equal(JSON.stringify(saved).includes("speech-secret"), false);
     assert.equal(saved.token_set, true);
     assert.equal(JSON.stringify(saved).includes("sample-password"), false);
     assert.equal(JSON.stringify(saved).includes("sample-token"), false);
@@ -63,6 +72,7 @@ test("browser frames interoperate with the real C parser, including UTF-8 and se
       ssid: saved.ssid, password: null, service_url: saved.service_url, service_token: null,
     });
     assert.equal(retained.password_set, true);
+    assert.equal(retained.speech_token_set, true);
     await assert.rejects(client.request("save", {
       ssid: "another network", password: null, service_url: "", service_token: null,
     }), /password_required/u);
@@ -72,6 +82,21 @@ test("browser frames interoperate with the real C parser, including UTF-8 and se
     assert.equal(cleared.password_set, false);
     assert.equal(cleared.token_set, false);
     assert.equal((await client.request("scan")).networks[0].ssid, "USB test");
+    // Model lists come from the device; "*" may only reuse a key saved for that URL.
+    await client.request("save", {
+      ssid: "", password: "", service_url: "https://api.deepseek.com/v1",
+      service_token: "chat-key",
+    });
+    const listed = await client.request("models", {
+      base_url: "https://api.deepseek.com/v1", api_key: null,
+    });
+    assert.deepEqual(listed.models, ["fixture-chat", "whisper-1"]);
+    await assert.rejects(client.request("models", {
+      base_url: "https://other.example/v1", api_key: null,
+    }), /key_required/u);
+    assert.deepEqual((await client.request("models", {
+      base_url: "https://other.example/v1", api_key: "typed",
+    })).models.length, 2);
   } finally { await client.disconnect(); }
 });
 
@@ -81,7 +106,11 @@ test("length limits use UTF-8 bytes and request IDs cover the full uint32 range"
   assert.throws(() => encodeRequest(1, "save", {
     ssid: "\u5bb6".repeat(11), password: null, service_url: "", service_token: null,
   }), /invalid_settings/u);
-  for (const service_url of ["https://user:pass@host", "file:///tmp/device", "http://host/#key"]) {
+  for (const service_url of ["https://user:pass@host", "file:///tmp/device", "http://host/#key",
+    "wss://service.example/realtime"]) {
+    assert.throws(() => encodeRequest(1, "save", {
+      ssid: "", password: null, service_url: "", service_token: null, speech_url: service_url,
+    }), /invalid_url/u);
     assert.throws(() => encodeRequest(1, "save", {
       ssid: "", password: null, service_url, service_token: null,
     }), /invalid_url/u);
@@ -105,7 +134,7 @@ test("timeouts allow retry; failed stream writes release requests and permit rec
     // A failed WritableStream stays errored; recovery needs a new USB session.
     await client.disconnect();
     await client.connect(new SerialPeer());
-    assert.equal((await client.request("status")).protocol, 1);
+    assert.equal((await client.request("status")).protocol, 3);
   } finally { await client.disconnect(); }
 });
 
@@ -138,6 +167,32 @@ test("disconnect rejects in-flight requests and releases both serial stream lock
   await assert.rejects(client.request("status"), /disconnected/u);
   const other = new SerialPeer();
   await client.connect(other);
-  assert.equal((await client.request("status")).protocol, 1);
+  assert.equal((await client.request("status")).protocol, 3);
   await client.disconnect();
+});
+
+test("models requests are bounded and never send an empty key", () => {
+  const text = new TextDecoder().decode(encodeRequest(5, "models", {
+    base_url: "https://api.example/v1", api_key: null,
+  }));
+  assert.equal(text, `${PREFIX}5\tmodels\t68747470733a2f2f6170692e6578616d706c652f7631\t*\n`);
+  for (const values of [{ base_url: "", api_key: null }, { base_url: "https://x/v1", api_key: "" },
+    { base_url: "https://x/v1", api_key: "a\nb" }]) {
+    assert.throws(() => encodeRequest(1, "models", values), /invalid_settings/u);
+  }
+  assert.throws(() => encodeRequest(1, "models", { base_url: "wss://x", api_key: null }),
+    /invalid_url/u);
+});
+
+test("model dropdowns recommend by purpose while keeping every model selectable", () => {
+  const models = ["gpt-4o-mini", "whisper-1", "tts-1", "gpt-4o-mini-tts", "gpt-4o-transcribe",
+    "text-embedding-3-small", "deepseek-chat", "deepseek-chat"];
+  const chat = groupModels("chat_model", models);
+  assert.deepEqual(chat.recommended, ["deepseek-chat", "gpt-4o-mini"]);
+  assert.deepEqual(groupModels("asr_model", models).recommended, ["gpt-4o-transcribe", "whisper-1"]);
+  assert.deepEqual(groupModels("tts_model", models).recommended, ["gpt-4o-mini-tts", "tts-1"]);
+  for (const kind of ["chat_model", "asr_model", "tts_model"]) {
+    const { recommended, others } = groupModels(kind, models);
+    assert.equal(recommended.length + others.length, 7);
+  }
 });

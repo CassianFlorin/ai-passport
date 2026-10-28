@@ -67,11 +67,18 @@ int main(void) {
 
     // A muted preview must not start the codec or send PCM. Preview failures
     // propagate so the dashboard cannot report a successful sound test.
+    test_auto_ack = false; // The preview lock has no worker to acknowledge.
     test_audio_volume = 0;
     test_write_calls = 0;
     test_format_result = ESP_FAIL;
     assert(app_audio_preview() == ESP_OK && test_write_calls == 0);
     test_audio_volume = 35;
+    // Without the startup lock, and while a conversation holds it, preview is silent.
+    assert(app_audio_preview() == ESP_ERR_TIMEOUT && test_write_calls == 0);
+    assert(app_audio_init() == ESP_OK && app_audio_init() == ESP_OK);
+    assert(app_audio_acquire(0));
+    assert(app_audio_preview() == ESP_ERR_TIMEOUT && test_write_calls == 0);
+    app_audio_release();
     assert(app_audio_preview() == ESP_FAIL && test_write_calls == 0);
     test_format_result = ESP_OK;
     test_write_fail_at = 1;
@@ -79,6 +86,8 @@ int main(void) {
     test_write_calls = test_write_fail_at = 0;
     assert(app_audio_preview() == ESP_OK);
     assert(test_applied_volume == 35 && test_write_calls == 20);
+    assert(app_audio_acquire(0)); // Every preview path released the lock.
+    app_audio_release();
     puts("audio worker lifecycle and recording fault tests: PASS");
     return 0;
 }

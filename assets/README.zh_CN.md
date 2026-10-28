@@ -67,15 +67,16 @@
   仓库仅保留 22,220 字节的子集。版权声明与 SIL Open Font License 1.1
   位于 [`fonts/NotoSansSC-OFL.txt`](fonts/NotoSansSC-OFL.txt)；字族改名为
   Cassian UI，保留原始许可元数据。
-- `fonts/cassian-ui-characters.txt` 记录固定界面使用的 100 个非 ASCII 字符。
+- `fonts/cassian-ui-characters.txt` 记录固定界面使用的 80 个非 ASCII 字符。
   `fonts/cassian_ui_14.c` 和 `fonts/cassian_ui_18.c` 在此基础上包含可打印
-  ASCII，各有 195 个字形，分别为 14/18 px、4 bpp。
+  ASCII，各有 175 个字形，分别为 14/18 px、4 bpp。
   `fonts/cassian_ui_28.c` 仅包含大号静音状态使用的 U+9759、U+97F3。
   它们是 LVGL 9 未压缩位图字库，不支持任意姓名或网络文本。未知字符不在
   支持范围内；保留缺字占位符，避免缺字静默消失。
 - 转换脚本从 `main/personal_home.c` 中提取中文字符串。使用前述命令可以
   从保留的源子集再生成。需要新增字符时，提供许可允许使用的完整源字体，
-  同时刷新源子集：
+  同时刷新源子集。请使用同一 `2.004-H2` 版本；其他版本的字形轮廓略有不同，
+  会改变现有界面的全部字形。
 
   ```bash
   python3 tools/generate_cassian_assets.py \
@@ -87,10 +88,34 @@
 - 统一静态检查无需开发依赖，即可核对字符清单、各字库的覆盖范围、已知缺失
   字符 U+9F98、位图边界与等宽字体的统一前进宽度。原生 LVGL 验证还会按
   Unicode 码点解码每个标签的 UTF-8，检查实际选用字体、布局以及选中、静音
-  和报错状态，并统计音量刻度中点亮的段数。中文 UI 位图共占 34,173 字节
-  Flash，加上 Geist 与 JetBrains Mono 后，参与链接的字体位图共 61,880
-  字节，包含对话入口、配置指引和连接错误状态。菜单图标与音量刻度采用
-  LVGL 绘图原语，不需要图片解码或图标字体回退。
+  和报错状态，并统计音量刻度中点亮的段数。中文 UI 位图共占 29,232 字节
+  Flash，加上 Geist 与 JetBrains Mono 后，参与链接的固定界面字体位图共
+  57,891 字节。菜单图标与音量刻度采用 LVGL 绘图原语，不需要图片解码或
+  图标字体回退。
+
+### AI 对话文字
+
+- `fonts/cassian_chat_14.c` 用于显示语音识别文字、AI 回复，以及 AI 对话页
+  （`main/ai_page.c`）上的全部固定文字。它包含可打印 ASCII、全部 7,445 个
+  GB2312 字符（含 6,763 个汉字）和 `— – … · “ ” ‘ ’` 等标点：共 7,543 个
+  字形，14 px、4 bpp，位图 679,301 字节，连同描述表约占 0.75 MB Flash。
+  字形直接从 Flash 读取，不占用内部 RAM。表情符号、生僻字等集合外字符会被
+  移除或显示为占位符。
+- 来源：设备所有者提供的 Noto Sans SC 常规体较早版本
+  `Version 0.00 July 30, 2017`（TTF SHA-256
+  `a0af66489baf1f306732ff16da58d86c342e0b3b4b3674079ee2a9b0aee23258`），
+  同样适用 [`fonts/NotoSansSC-OFL.txt`](fonts/NotoSansSC-OFL.txt) 中的
+  SIL Open Font License 1.1。16 MB 的源字体不提交到仓库。单独再生成此字库
+  不会改动其他资源：
+
+  ```bash
+  python3 tools/generate_cassian_assets.py \
+    --sharp-module /path/to/node_modules/sharp \
+    --chat-source /path/to/NotoSansSC-Regular.ttf
+  python3 tools/check_cassian_fonts.py
+  ```
+
+- 静态检查会核对 GB2312 全覆盖，以及 AI 对话页的固定文字全部位于该集合内。
 
 ## 图片（images）
 

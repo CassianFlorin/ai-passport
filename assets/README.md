@@ -76,9 +76,9 @@ mocked; production readings come from the existing BSP and heap APIs.
   Only the 22,220-byte subset is retained. Its copyright notice and SIL Open
   Font License 1.1 are in [`fonts/NotoSansSC-OFL.txt`](fonts/NotoSansSC-OFL.txt);
   its family was renamed to Cassian UI while preserving the license metadata.
-- `fonts/cassian-ui-characters.txt` records the 100 non-ASCII characters in the
+- `fonts/cassian-ui-characters.txt` records the 80 non-ASCII characters in the
   fixed UI. `fonts/cassian_ui_14.c` and `fonts/cassian_ui_18.c` each contain
-  those characters plus printable ASCII: 195 glyphs at 14/18 px and 4 bpp.
+  those characters plus printable ASCII: 175 glyphs at 14/18 px and 4 bpp.
   `fonts/cassian_ui_28.c` contains only U+9759 and U+97F3 for the large mute
   state. These are uncompressed LVGL 9 bitmap fonts, not arbitrary-name or
   network-text fonts. Unknown characters are unsupported; placeholders remain
@@ -86,7 +86,8 @@ mocked; production readings come from the existing BSP and heap APIs.
 - The converter reads the Chinese string literals in `main/personal_home.c`.
   Regenerate from the retained source with the preceding command. When new
   characters are needed, supply the licensed full font so the source subset
-  can also be refreshed:
+  can also be refreshed. Use the same `2.004-H2` release: another release has
+  slightly different outlines and would change every existing UI glyph.
 
   ```bash
   python3 tools/generate_cassian_assets.py \
@@ -100,10 +101,36 @@ mocked; production readings come from the existing BSP and heap APIs.
   without development dependencies. Native LVGL verification additionally
   decodes each label's UTF-8, checks its actual selected font, layout and
   selected/muted/error states, and counts the volume meter's lit segments.
-  Chinese UI bitmaps use 34,173 Flash bytes; with Geist and JetBrains Mono,
-  linked font bitmaps total 61,880 bytes. This includes the conversation entry,
-  configuration guidance and connection error states. Menu icons and the volume meter use
-  LVGL drawing primitives, requiring no image decoder or icon-font fallback.
+  Chinese UI bitmaps use 29,232 Flash bytes; with Geist and JetBrains Mono,
+  linked fixed-UI font bitmaps total 57,891 bytes. Menu icons and the volume
+  meter use LVGL drawing primitives, requiring no image decoder or icon-font
+  fallback.
+
+### AI conversation text
+
+- `fonts/cassian_chat_14.c` renders transcripts, replies and every fixed string
+  on the AI page (`main/ai_page.c`). It contains printable ASCII, all 7,445
+  GB2312 characters (including the 6,763 hanzi) and the marks
+  `— – … · “ ” ‘ ’`: 7,543 glyphs at 14 px and 4 bpp, with 679,301 bitmap bytes
+  and about 0.75 MB of Flash including descriptors. Glyphs are read from Flash;
+  the font adds no internal RAM. Characters outside this set, such as emoji or
+  rare hanzi, are removed or drawn as placeholders.
+- Source: Noto Sans SC Regular, an earlier `Version 0.00 July 30, 2017` build
+  supplied by the device owner (TTF SHA-256
+  `a0af66489baf1f306732ff16da58d86c342e0b3b4b3674079ee2a9b0aee23258`), under
+  the same SIL Open Font License 1.1 in
+  [`fonts/NotoSansSC-OFL.txt`](fonts/NotoSansSC-OFL.txt). The 16 MB source is not
+  committed. Regenerating this font alone leaves every other asset unchanged:
+
+  ```bash
+  python3 tools/generate_cassian_assets.py \
+    --sharp-module /path/to/node_modules/sharp \
+    --chat-source /path/to/NotoSansSC-Regular.ttf
+  python3 tools/check_cassian_fonts.py
+  ```
+
+- The static gate checks full GB2312 coverage and that every fixed AI-page
+  string is inside that set.
 
 ## Images
 

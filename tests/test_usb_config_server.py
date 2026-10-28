@@ -53,6 +53,21 @@ class ServerTests(unittest.TestCase):
     def test_unrelated_host_is_rejected(self):
         self.assertEqual(self.request("GET", "/", Host="unrelated.example")[0], 403)
 
+    def test_hosted_headers_match_local_policy(self):
+        # Cloudflare Pages serves the same files with tools/usb-config/_headers.
+        # The hosted page must keep the local security policy, notably
+        # connect-src 'none': the page talks only to the USB device.
+        hosted = {}
+        for line in (module.PAGE_ROOT / "_headers").read_text().splitlines()[1:]:
+            name, value = line.strip().split(": ", 1)
+            hosted[name.lower()] = value
+        _, headers, _ = self.request("GET", "/")
+        local = {name.lower(): value for name, value in headers.items()}
+        for name in ["x-content-type-options", "referrer-policy", "permissions-policy",
+                     "content-security-policy"]:
+            self.assertEqual(hosted[name], local[name], name)
+        self.assertNotIn("/_headers", module.ASSETS)
+
     def test_head_has_no_body(self):
         status, _, body = self.request("HEAD", "/")
         self.assertEqual(status, 200)
