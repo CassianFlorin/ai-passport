@@ -319,8 +319,23 @@ static void scan_wifi(uint32_t id)
         reply(id, NULL, "wifi_unavailable");
         return;
     }
+    // The driver rejects scans while an association is in progress. When the
+    // saved network is unreachable the retry loop is almost always connecting,
+    // which is exactly when a different network must be chosen, so pause it.
+    bool paused = s_values.ssid[0] && strcmp(s_wifi_state, "connected");
+    if (paused) {
+        (void)esp_wifi_disconnect();
+        s_connect_started = s_retry_at = 0;
+        s_wifi_state = "retrying";
+    }
     wifi_scan_config_t config = { .show_hidden = false };
     err = esp_wifi_scan_start(&config, true);
+    if (paused) {
+        // The blocking scan outlasts delivery of the pause's own disconnect
+        // event; drop it so it does not stretch the backoff, then resume soon.
+        atomic_store(&s_link_event, 0);
+        s_retry_at = esp_timer_get_time() + 2000000;
+    }
     if (err != ESP_OK) {
         reply(id, NULL, "scan_busy");
         return;
