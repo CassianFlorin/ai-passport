@@ -221,8 +221,16 @@ static void check_key_lock(void) {
     // A failed read counts as "no key": it cannot press, and a held key survives it.
     fail_read = 1; assert(hold(0, 200) == -1); fail_read = 0;
     assert(hold(ok, 100) == BSP_BTN_OK);
-    fail_read = 1; assert(hold(0, 60) == BSP_BTN_OK); fail_read = 0;
+    fail_read = 1; assert(hold(0, BSP_BTN_HOLD_MS - 10) == BSP_BTN_OK); fail_read = 0;
     assert(hold(ok, 20) == BSP_BTN_OK);
+    assert(hold(released, 200) == -1);
+
+    // A brisk double click leaves ~80 ms between presses. The hold must release
+    // within that gap, or the two presses merge into one long click (a downstream
+    // home page lost its OK double-click to exactly that on the device).
+    assert(hold(ok, 80) == BSP_BTN_OK);
+    assert(hold(released, 80) == -1);
+    assert(hold(ok, 80) == BSP_BTN_OK);
     assert(hold(released, 200) == -1);
 
     // Re-initialization after a teardown starts from "no key" again.
