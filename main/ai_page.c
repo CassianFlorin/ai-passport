@@ -45,6 +45,9 @@ static lv_obj_t *label(lv_obj_t *parent, uint32_t color, int x, int y, int width
 
 void ai_page_build(lv_obj_t *parent)
 {
+    // A real mode switch clears the note page's last result from the shared client.
+    ai_client_set_mode(AI_MODE_CHAT);
+
     lv_obj_t *caption = label(parent, COLOR_MUTED, 12, 0, 100);
     lv_obj_set_style_text_font(caption, &cassian_mono_12, 0);
     lv_label_set_text(caption, "VOICE / AI");
@@ -83,7 +86,7 @@ void ai_page_build(lv_obj_t *parent)
     s_built = true;
 }
 
-static const char *error_text(ai_error_t error)
+const char *ai_error_text(ai_error_t error)
 {
     switch (error) {
     case AI_ERROR_NOT_READY: return "网络或服务未就绪";
@@ -98,11 +101,13 @@ static const char *error_text(ai_error_t error)
     case AI_ERROR_MEMORY: return "设备内存不足";
     case AI_ERROR_AUDIO: return "麦克风或扬声器故障";
     case AI_ERROR_AUDIO_BUSY: return "音频正在使用";
+    case AI_ERROR_STORAGE: return "无法写入设备存储";
+    case AI_ERROR_STORAGE_FULL: return "设备已存满";
     default: return "服务返回错误";
     }
 }
 
-static const char *guidance_text(ai_conversation_guidance_t guidance)
+const char *ai_guidance_text(ai_conversation_guidance_t guidance)
 {
     switch (guidance) {
     case AI_GUIDANCE_STARTING: return "正在读取设备配置";
@@ -197,7 +202,7 @@ void ai_page_refresh(const usb_config_status_t *connection)
         } else if (status.error == AI_ERROR_HTTP) {
             snprintf(hint, sizeof(hint), "服务返回 HTTP %d · OK 重试", status.http_status);
         } else {
-            snprintf(hint, sizeof(hint), "%s · OK 重试", error_text(status.error));
+            snprintf(hint, sizeof(hint), "%s · OK 重试", ai_error_text(status.error));
         }
         break;
     }
@@ -209,7 +214,7 @@ void ai_page_refresh(const usb_config_status_t *connection)
         } else if (status.speech_error == AI_ERROR_HTTP) {
             snprintf(hint, sizeof(hint), "语音播放失败：HTTP %d", status.http_status);
         } else if (status.speech_error != AI_ERROR_NONE) {
-            snprintf(hint, sizeof(hint), "语音播放失败：%s", error_text(status.speech_error));
+            snprintf(hint, sizeof(hint), "语音播放失败：%s", ai_error_text(status.speech_error));
         } else if (status.speech_skipped) {
             snprintf(hint, sizeof(hint), "已静音，仅显示文字");
         } else {
@@ -223,7 +228,7 @@ void ai_page_refresh(const usb_config_status_t *connection)
             snprintf(hint, sizeof(hint), "稍候即可重新开始");
             accent = COLOR_MUTED;
         } else if (guidance != AI_GUIDANCE_READY) {
-            snprintf(title, sizeof(title), "%s", guidance_text(guidance));
+            snprintf(title, sizeof(title), "%s", ai_guidance_text(guidance));
             snprintf(hint, sizeof(hint), "完成后按 OK 开始对话");
             accent = COLOR_WARM;
         } else {

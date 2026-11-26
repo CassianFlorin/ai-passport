@@ -1,4 +1,5 @@
 // main/ai_client.c - Speech -> transcript -> chat reply -> speech, one turn per task.
+// In AI_MODE_NOTE the turn ends after the transcript, which is saved as a note.
 //
 // Memory budget without PSRAM: one HTTPS connection at a time, an 8 KB work
 // buffer, and a 16 KB capture ring only while recording. Audio is streamed as
@@ -7,8 +8,10 @@
 
 #include "ai_protocol.h"
 #include "app_audio.h"
+#include "app_clock.h"
 #include "app_settings.h"
 #include "bsp_audio.h"
+#include "note_store.h"
 #include "usb_config.h"
 
 #include "esp_crt_bundle.h"
@@ -63,6 +66,8 @@ static turn_t s_history[HISTORY_TURNS];
 static size_t s_history_count;
 
 static atomic_bool s_running, s_send, s_cancel, s_stop_speaking;
+// Written by the input worker only while no turn runs; read by the turn task.
+static _Atomic ai_mode_t s_mode = AI_MODE_CHAT;
 // Set with s_running while a model list is fetched for the configuration page.
 static atomic_bool s_fetching;
 static atomic_bool s_capture_stop, s_capture_failed;
@@ -590,6 +595,20 @@ static void speak(const usb_config_values_t *config, char *work)
     if (error != AI_ERROR_NONE && !atomic_load(&s_cancel)) speech_failed(error, status);
 }
 
+// The transcript already sits in s_user; a note keeps it on screen as the
+// confirmation of what was saved.
+static void save_note(void)
+{
+    char text[AI_CLIENT_USER_MAX];
+    xSemaphoreTake(s_text_lock, portMAX_DELAY);
+    memcpy(text, s_user, sizeof(text));
+    xSemaphoreGive(s_text_lock);
+    esp_err_t err = note_store_add(text, app_clock_epoch());
+    if (err == ESP_ERR_NO_MEM) fail(AI_ERROR_STORAGE_FULL, 0);
+    else if (err != ESP_OK) fail(AI_ERROR_STORAGE, 0);
+    else set_stage(AI_STAGE_DONE);
+}
+
 static void run_turn(usb_config_values_t *config, char *work)
 {
     usb_config_status_t connection;
@@ -600,6 +619,10 @@ static void run_turn(usb_config_values_t *config, char *work)
         return;
     }
     if (!transcribe(config, work) || atomic_load(&s_cancel)) return;
+    if (atomic_load(&s_mode) == AI_MODE_NOTE) {
+        save_note();
+        return;
+    }
     if (!chat(config, work) || atomic_load(&s_cancel)) return;
     speak(config, work);
     set_stage(AI_STAGE_DONE);
@@ -656,6 +679,18 @@ static void start_turn(void)
         fail(AI_ERROR_MEMORY, 0);
         atomic_store(&s_running, false);
     }
+}
+
+void ai_client_set_mode(ai_mode_t mode)
+{
+    if (!s_text_lock || atomic_load(&s_running) || atomic_load(&s_mode) == mode) return;
+    atomic_store(&s_mode, mode);
+    xSemaphoreTake(s_text_lock, portMAX_DELAY);
+    s_user[0] = s_reply[0] = '\0';
+    xSemaphoreGive(s_text_lock);
+    taskENTER_CRITICAL(&s_status_lock);
+    s_status = (ai_client_status_t){ .revision = s_status.revision + 1 };
+    taskEXIT_CRITICAL(&s_status_lock);
 }
 
 void ai_client_command(ai_command_t command)

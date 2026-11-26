@@ -7,7 +7,7 @@ app_action_t app_navigation_handle(app_navigation_t *state, app_key_t key,
 {
     if (!state || key < APP_KEY_UP || key > APP_KEY_OK ||
         gesture < APP_GESTURE_CLICK || gesture > APP_GESTURE_LONG ||
-        state->page < APP_PAGE_HOME || state->page > APP_PAGE_SETTINGS ||
+        state->page < APP_PAGE_HOME || state->page > APP_PAGE_NOTE ||
         state->selection >= APP_MENU_COUNT) {
         return APP_ACTION_NONE;
     }
@@ -36,7 +36,7 @@ app_action_t app_navigation_handle(app_navigation_t *state, app_key_t key,
     case APP_PAGE_MENU: {
         if (key == APP_KEY_OK) {
             static const app_page_t pages[APP_MENU_COUNT] = {
-                APP_PAGE_AI, APP_PAGE_SYSTEM, APP_PAGE_SETTINGS,
+                APP_PAGE_AI, APP_PAGE_NOTE, APP_PAGE_SYSTEM, APP_PAGE_SETTINGS,
             };
             state->page = pages[state->selection];
             return APP_ACTION_PAGE;
@@ -53,6 +53,10 @@ app_action_t app_navigation_handle(app_navigation_t *state, app_key_t key,
         // OK advances the conversation; an OK double is ignored above.
         return key == APP_KEY_UP ? APP_ACTION_AI_SCROLL_UP
              : key == APP_KEY_DOWN ? APP_ACTION_AI_SCROLL_DOWN : APP_ACTION_AI_TALK;
+    case APP_PAGE_NOTE:
+        // OK records or sends a note; UP/DOWN browse the saved notes.
+        return key == APP_KEY_UP ? APP_ACTION_NOTE_SCROLL_UP
+             : key == APP_KEY_DOWN ? APP_ACTION_NOTE_SCROLL_DOWN : APP_ACTION_NOTE_RECORD;
     case APP_PAGE_SYSTEM:
         return APP_ACTION_NONE;
     case APP_PAGE_SETTINGS:

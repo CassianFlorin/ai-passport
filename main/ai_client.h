@@ -28,6 +28,16 @@ typedef struct {
 // Call once at startup before the input worker can send commands.
 esp_err_t ai_client_init(void);
 
+typedef enum {
+    AI_MODE_CHAT, // transcript -> chat reply -> speech
+    AI_MODE_NOTE, // transcript -> saved voice note (note_store), no reply
+} ai_mode_t;
+
+// Choose what the next turn does; call on the input worker when a page opens.
+// Ignored while a turn runs. A real switch clears the shown exchange and stage
+// so one page never shows the other's result; chat history is kept.
+void ai_client_set_mode(ai_mode_t mode);
+
 // Call on the input worker. Commands never block on network or audio work.
 void ai_client_command(ai_command_t command);
 // Stop any turn, for example when leaving the AI page.

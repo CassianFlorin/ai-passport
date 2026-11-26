@@ -73,7 +73,7 @@ The device keeps its own redesigned homepage and three-button controls.
 ## Device conversation
 
 Double-press OK on the homepage to open the function list. Its first entry is
-AI conversation, followed by system status and sound settings. UP/DOWN move
+AI conversation, followed by voice notes, system status and sound settings. UP/DOWN move
 one entry at a time without wrapping; click OK to open an entry and hold OK
 to return to the list. The selected entry is retained on return.
 
@@ -114,6 +114,38 @@ The connection snapshot used for guidance contains only public flags, never
 SSIDs, endpoints or credentials. The UI samples it without doing Flash or radio
 work while holding the LVGL lock. The settings-page preview never waits for a
 running turn; it reports that preview is unavailable during a conversation.
+
+## Device voice notes
+
+The voice-note page stores one spoken sentence on the device for a later sync
+into notes. Recording and transcription share the conversation client and its
+speech settings: `POST {speech Base URL}/audio/transcriptions` with the speech
+recognition model. The transcript is saved directly, with no chat request and
+no speech playback. Any OpenAI-compatible service with that endpoint works.
+
+| Key | Action |
+| --- | --- |
+| OK | Start recording; press again to save. While waiting, cancel |
+| UP / DOWN | Scroll the saved notes |
+| Hold OK | Return to the list, cancelling a running recording first |
+
+- Notes live in the NVS namespace `notes` and survive reboots and app-partition
+  flashes. Up to 20 are kept; a full store starts no recording and never
+  overwrites a note that was not synced yet. No key deletes a note.
+- Each note gets a sequence number that is never reused. Once Wi-Fi connects,
+  the device sets its clock by SNTP (`ntp.aliyun.com`); notes saved afterwards
+  carry a UTC timestamp and are shown in China Standard Time. Notes saved before
+  the clock is set have no time.
+- The page shows the newest five notes and the function list shows how many
+  wait for sync. The UI's note snapshot is read before the LVGL lock is taken,
+  and Flash is read only after the store changed.
+- A note holds at most 255 UTF-8 bytes and is cut on a character boundary. The
+  note is written before the header that makes it visible, so power loss
+  between the two writes loses only that note and never damages saved ones. A
+  header the firmware does not recognise is neither rewritten nor cleared; the
+  page reports a storage error and recording stops.
+- The channel that syncs notes into Obsidian is not implemented yet; notes
+  currently exist only on the device.
 
 ## Settings and limits
 

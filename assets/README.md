@@ -73,12 +73,12 @@ mocked; production readings come from the existing BSP and heap APIs.
   version `2.004-H2`, from the installed `@larksuite/whiteboard-cli` font assets.
   The original TTF SHA-256 is
   `5cf8b2a0576d5680284ab03a7a8219499d59bbe981a79bb3dc0031f251c39736`.
-  Only the 22,220-byte subset is retained. Its copyright notice and SIL Open
+  Only the 21,512-byte subset is retained. Its copyright notice and SIL Open
   Font License 1.1 are in [`fonts/NotoSansSC-OFL.txt`](fonts/NotoSansSC-OFL.txt);
   its family was renamed to Cassian UI while preserving the license metadata.
-- `fonts/cassian-ui-characters.txt` records the 80 non-ASCII characters in the
+- `fonts/cassian-ui-characters.txt` records the 95 non-ASCII characters in the
   fixed UI. `fonts/cassian_ui_14.c` and `fonts/cassian_ui_18.c` each contain
-  those characters plus printable ASCII: 175 glyphs at 14/18 px and 4 bpp.
+  those characters plus printable ASCII: 190 glyphs at 14/18 px and 4 bpp.
   `fonts/cassian_ui_28.c` contains only U+9759 and U+97F3 for the large mute
   state. These are uncompressed LVGL 9 bitmap fonts, not arbitrary-name or
   network-text fonts. Unknown characters are unsupported; placeholders remain

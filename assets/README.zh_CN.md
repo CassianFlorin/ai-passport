@@ -64,12 +64,12 @@
   的改名子集，源字体来自本机已安装的 `@larksuite/whiteboard-cli` 字体资源。
   原始 TTF 的 SHA-256 为
   `5cf8b2a0576d5680284ab03a7a8219499d59bbe981a79bb3dc0031f251c39736`。
-  仓库仅保留 22,220 字节的子集。版权声明与 SIL Open Font License 1.1
+  仓库仅保留 21,512 字节的子集。版权声明与 SIL Open Font License 1.1
   位于 [`fonts/NotoSansSC-OFL.txt`](fonts/NotoSansSC-OFL.txt)；字族改名为
   Cassian UI，保留原始许可元数据。
-- `fonts/cassian-ui-characters.txt` 记录固定界面使用的 80 个非 ASCII 字符。
+- `fonts/cassian-ui-characters.txt` 记录固定界面使用的 95 个非 ASCII 字符。
   `fonts/cassian_ui_14.c` 和 `fonts/cassian_ui_18.c` 在此基础上包含可打印
-  ASCII，各有 175 个字形，分别为 14/18 px、4 bpp。
+  ASCII，各有 190 个字形，分别为 14/18 px、4 bpp。
   `fonts/cassian_ui_28.c` 仅包含大号静音状态使用的 U+9759、U+97F3。
   它们是 LVGL 9 未压缩位图字库，不支持任意姓名或网络文本。未知字符不在
   支持范围内；保留缺字占位符，避免缺字静默消失。

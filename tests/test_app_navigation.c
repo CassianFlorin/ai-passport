@@ -26,7 +26,7 @@ static void test_function_list(void)
 {
     app_navigation_t nav = { .page = APP_PAGE_MENU };
     const app_page_t pages[APP_MENU_COUNT] = {
-        APP_PAGE_AI, APP_PAGE_SYSTEM, APP_PAGE_SETTINGS,
+        APP_PAGE_AI, APP_PAGE_NOTE, APP_PAGE_SYSTEM, APP_PAGE_SETTINGS,
     };
 
     assert(app_navigation_handle(&nav, APP_KEY_UP, APP_GESTURE_CLICK) == APP_ACTION_NONE);
@@ -54,6 +54,8 @@ static void test_function_list(void)
     assert(app_navigation_handle(&nav, APP_KEY_UP, APP_GESTURE_DOUBLE) == APP_ACTION_SELECTION);
     assert(nav.selection == APP_MENU_SYSTEM);
     assert(app_navigation_handle(&nav, APP_KEY_UP, APP_GESTURE_CLICK) == APP_ACTION_SELECTION);
+    assert(nav.selection == APP_MENU_NOTE);
+    assert(app_navigation_handle(&nav, APP_KEY_UP, APP_GESTURE_CLICK) == APP_ACTION_SELECTION);
     assert(nav.selection == APP_MENU_AI);
     assert(app_navigation_handle(&nav, APP_KEY_UP, APP_GESTURE_DOUBLE) == APP_ACTION_NONE);
     assert(app_navigation_handle(&nav, APP_KEY_OK, APP_GESTURE_LONG) == APP_ACTION_PAGE);
@@ -80,6 +82,27 @@ static void test_ai(void)
     assert(nav.page == APP_PAGE_MENU && nav.selection == APP_MENU_AI);
 }
 
+static void test_note(void)
+{
+    app_navigation_t nav = { .page = APP_PAGE_NOTE, .selection = APP_MENU_NOTE };
+
+    assert(app_navigation_handle(&nav, APP_KEY_OK, APP_GESTURE_CLICK) == APP_ACTION_NOTE_RECORD);
+    // OK double belongs to the homepage and must never start a recording.
+    assert(app_navigation_handle(&nav, APP_KEY_OK, APP_GESTURE_DOUBLE) == APP_ACTION_NONE);
+    assert(app_navigation_handle(&nav, APP_KEY_UP, APP_GESTURE_CLICK) ==
+           APP_ACTION_NOTE_SCROLL_UP);
+    assert(app_navigation_handle(&nav, APP_KEY_UP, APP_GESTURE_DOUBLE) ==
+           APP_ACTION_NOTE_SCROLL_UP);
+    assert(app_navigation_handle(&nav, APP_KEY_DOWN, APP_GESTURE_CLICK) ==
+           APP_ACTION_NOTE_SCROLL_DOWN);
+    // Notes are never cleared from the device by a key: they wait for a sync.
+    assert(app_navigation_handle(&nav, APP_KEY_UP, APP_GESTURE_LONG) == APP_ACTION_NONE);
+    assert(app_navigation_handle(&nav, APP_KEY_DOWN, APP_GESTURE_LONG) == APP_ACTION_NONE);
+    assert(nav.page == APP_PAGE_NOTE);
+    assert(app_navigation_handle(&nav, APP_KEY_OK, APP_GESTURE_LONG) == APP_ACTION_PAGE);
+    assert(nav.page == APP_PAGE_MENU && nav.selection == APP_MENU_NOTE);
+}
+
 static void test_settings(void)
 {
     app_navigation_t nav = { .page = APP_PAGE_SETTINGS, .selection = APP_MENU_SETTINGS };
@@ -101,6 +124,7 @@ int main(void)
     test_home_entry();
     test_function_list();
     test_ai();
+    test_note();
     test_settings();
 
     app_navigation_t nav = {0};

@@ -50,8 +50,9 @@ def main():
     for size in (12, 14, 32):
         check_font(f"cassian_mono_{size}", ascii_text, monospaced=True)
 
-    # The AI page renders fixed and arbitrary text with the conversation font.
-    page = (ROOT / "main/ai_page.c").read_text()
+    # The AI and voice-note pages render fixed and arbitrary text with the
+    # conversation font.
+    page = "".join((ROOT / "main" / name).read_text() for name in ("ai_page.c", "note_page.c"))
     gb2312 = set()
     for code in range(0x80, 0x10000):
         try:
@@ -60,7 +61,7 @@ def main():
         except UnicodeEncodeError:
             pass
     page_text = {char for char in page if ord(char) > 127}
-    assert page_text <= gb2312 | set("\u00b7"), "AI page text is outside the chat font"
+    assert page_text <= gb2312 | set("\u00b7"), "AI or note page text is outside the chat font"
     check_font("cassian_chat_14", ascii_text + "".join(gb2312 | page_text))
 
 

@@ -15,6 +15,8 @@
 #include "cassian_assets.h"
 #include "esp_heap_caps.h"
 #include "esp_timer.h"
+#include "note_page.h"
+#include "note_store.h"
 #include "performance_metrics.h"
 #include "usb_config.h"
 
@@ -200,6 +202,19 @@ static void draw_menu_icon(lv_event_t *event)
             draw_line(layer, color, 2, x + 7 + i * 6, y + 12,
                        x + 8 + i * 6, y + 12);
         }
+    } else if (index == APP_MENU_NOTE) {
+        // A sheet with a folded corner and three ruled lines.
+        draw_line(layer, color, 1, x + 3, y + 1, x + 19, y + 1);
+        draw_line(layer, color, 1, x + 19, y + 1, x + 25, y + 7);
+        draw_line(layer, color, 1, x + 25, y + 7, x + 25, y + 27);
+        draw_line(layer, color, 1, x + 25, y + 27, x + 3, y + 27);
+        draw_line(layer, color, 1, x + 3, y + 27, x + 3, y + 1);
+        draw_line(layer, color, 1, x + 19, y + 1, x + 19, y + 7);
+        draw_line(layer, color, 1, x + 19, y + 7, x + 25, y + 7);
+        for (int i = 0; i < 3; ++i) {
+            draw_line(layer, color, 2, x + 8, y + 12 + i * 5,
+                      x + (i == 2 ? 15 : 20), y + 12 + i * 5);
+        }
     } else if (index == APP_MENU_SYSTEM) {
         draw_line(layer, color, 1, x, y + 3, x + 27, y + 3);
         draw_line(layer, color, 1, x, y + 3, x, y + 24);
@@ -236,33 +251,47 @@ static const char *ai_menu_summary(void)
     }
 }
 
+// Pending notes are the one thing the row must never hide: they are not in
+// the vault yet.
+static const char *note_menu_summary(void)
+{
+    static char text[32];
+    size_t count = note_page_pending();
+    if (!note_page_store_ready()) return "存储读取失败";
+    if (!count) return "说一句，存进设备";
+    lv_snprintf(text, sizeof(text), "待同步 %u 条", (unsigned)count);
+    return text;
+}
+
 static void build_menu(void)
 {
     create_label(s_body, "ESP32-C3", &cassian_mono_12, COLOR_MUTED, 12, 2, CONTENT_WIDTH);
-    const char *entries[APP_MENU_COUNT] = { "AI 对话", "系统状态", "设置" };
+    const char *entries[APP_MENU_COUNT] = { "AI 对话", "随手记", "系统状态", "设置" };
     const char *descriptions[APP_MENU_COUNT] = {
         ai_menu_summary(),
+        note_menu_summary(),
         "内存 / 电量 / 运行",
         "音量 / 静音 / 试听",
     };
     for (unsigned i = 0; i < APP_MENU_COUNT; ++i) {
-        s_menu_rows[i] = create_panel(s_body, 12, 24 + 64 * (int)i,
-                                      CONTENT_WIDTH, 58, COLOR_SURFACE);
+        // Four rows of 45 px at a 49 px pitch end at y=216, above the footer rule.
+        s_menu_rows[i] = create_panel(s_body, 12, 24 + 49 * (int)i,
+                                      CONTENT_WIDTH, 45, COLOR_SURFACE);
         lv_obj_set_style_border_width(s_menu_rows[i], 1, 0);
         // Each vector icon is drawn by one owned object. Its callback disappears
         // with the row, and never keeps pointers to a deleted page.
         s_menu_icons[i] = lv_obj_create(s_menu_rows[i]);
         lv_obj_remove_style_all(s_menu_icons[i]);
-        lv_obj_set_pos(s_menu_icons[i], 12, 14);
+        lv_obj_set_pos(s_menu_icons[i], 12, 8);
         lv_obj_set_size(s_menu_icons[i], 28, 28);
         lv_obj_add_event_cb(s_menu_icons[i], draw_menu_icon, LV_EVENT_DRAW_MAIN,
                             (void *)(uintptr_t)i);
         s_menu_labels[i] = create_label(s_menu_rows[i], entries[i],
                                         &cassian_ui_18,
-                                        COLOR_INK, 54, 4, CONTENT_WIDTH - 66);
+                                        COLOR_INK, 54, 1, CONTENT_WIDTH - 66);
         s_menu_descriptions[i] = create_label(s_menu_rows[i], descriptions[i],
                                               &cassian_ui_14, COLOR_MUTED,
-                                              54, 31, CONTENT_WIDTH - 66);
+                                              54, 24, CONTENT_WIDTH - 66);
     }
     create_panel(s_body, 12, 220, CONTENT_WIDTH, 1, COLOR_LINE);
     s_menu_heap = create_label(s_body, "--", &cassian_mono_12,
@@ -370,6 +399,7 @@ static void refresh_page(void)
     if (s_navigation.page == APP_PAGE_MENU) {
         refresh_selection();
         lv_label_set_text(s_menu_descriptions[APP_MENU_AI], ai_menu_summary());
+        lv_label_set_text(s_menu_descriptions[APP_MENU_NOTE], note_menu_summary());
         lv_label_set_text(s_menu_heap, s_metrics.free);
         if (s_audio_ready) {
             lv_label_set_text_fmt(s_menu_volume, "%u%%", (unsigned)app_settings_output_volume());
@@ -380,6 +410,9 @@ static void refresh_page(void)
     } else if (s_navigation.page == APP_PAGE_AI) {
         s_ai_revision = ai_client_revision();
         ai_page_refresh(&s_connection);
+    } else if (s_navigation.page == APP_PAGE_NOTE) {
+        s_ai_revision = ai_client_revision();
+        note_page_refresh(&s_connection);
     } else if (s_navigation.page == APP_PAGE_SYSTEM) {
         lv_label_set_text(s_heap_value, s_metrics.free);
         lv_label_set_text(s_largest_value, s_metrics.largest);
@@ -436,6 +469,10 @@ static void build_page(void)
     case APP_PAGE_AI:
         title = "AI 对话";
         ai_page_build(s_body);
+        break;
+    case APP_PAGE_NOTE:
+        title = "随手记";
+        note_page_build(s_body);
         break;
     case APP_PAGE_SYSTEM:
         title = "系统状态";
@@ -505,6 +542,7 @@ void personal_home_refresh(void)
     s_metrics.soc = bsp_battery_soc();
     s_metrics.mv = bsp_battery_mv();
     usb_config_get_status(&s_connection);
+    note_page_prepare();
     if (!bsp_lvgl_lock(250)) return;
     refresh_page();
     bsp_lvgl_unlock();
@@ -513,10 +551,31 @@ void personal_home_refresh(void)
 void personal_home_poll(void)
 {
     // Conversation stages change faster than the one-second telemetry refresh.
-    if (s_navigation.page != APP_PAGE_AI || ai_client_revision() == s_ai_revision) return;
+    if ((s_navigation.page != APP_PAGE_AI && s_navigation.page != APP_PAGE_NOTE) ||
+        ai_client_revision() == s_ai_revision) return;
     usb_config_get_status(&s_connection);
+    note_page_prepare();
     if (!bsp_lvgl_lock(250)) return;
     refresh_page();
+    bsp_lvgl_unlock();
+}
+
+static void handle_note(app_action_t action)
+{
+    if (action == APP_ACTION_NOTE_RECORD) {
+        ai_client_status_t status;
+        ai_client_get_status(&status);
+        usb_config_get_status(&s_connection);
+        // A full or unreadable store cannot keep the note, so do not record it.
+        bool ready = ai_conversation_guidance(&s_connection) == AI_GUIDANCE_READY &&
+                     note_store_ready() && note_store_count() < NOTE_STORE_CAPACITY;
+        ai_client_command(ai_talk_command(status.stage, ready));
+    }
+    note_page_prepare();
+    if (!bsp_lvgl_lock(250)) return;
+    if (action == APP_ACTION_NOTE_SCROLL_UP) note_page_scroll(1);
+    else if (action == APP_ACTION_NOTE_SCROLL_DOWN) note_page_scroll(-1);
+    else refresh_page();
     bsp_lvgl_unlock();
 }
 
@@ -556,12 +615,15 @@ void personal_home_key(bsp_btn_t btn, bsp_btn_ev_t ev)
 
     if (action == APP_ACTION_PAGE || action == APP_ACTION_SELECTION) {
         usb_config_get_status(&s_connection);
+        note_page_prepare();
         // Publish navigation only after obtaining the lock. On contention the
         // old screen and its button semantics must remain one consistent pair.
         if (!bsp_lvgl_lock(250)) return;
         // A conversation belongs to its page; leaving stops the microphone,
         // network request and speech before the widgets are deleted.
-        if (s_navigation.page == APP_PAGE_AI && next.page != APP_PAGE_AI) ai_client_cancel();
+        // The AI and note pages share one client; leaving either one stops its turn.
+        if ((s_navigation.page == APP_PAGE_AI || s_navigation.page == APP_PAGE_NOTE) &&
+            next.page != s_navigation.page) ai_client_cancel();
         s_navigation = next;
         if (action == APP_ACTION_PAGE) build_page();
         else refresh_selection();
@@ -572,6 +634,11 @@ void personal_home_key(bsp_btn_t btn, bsp_btn_ev_t ev)
     if (action == APP_ACTION_AI_TALK || action == APP_ACTION_AI_RESET ||
         action == APP_ACTION_AI_SCROLL_UP || action == APP_ACTION_AI_SCROLL_DOWN) {
         handle_ai(action);
+        return;
+    }
+    if (action == APP_ACTION_NOTE_RECORD || action == APP_ACTION_NOTE_SCROLL_UP ||
+        action == APP_ACTION_NOTE_SCROLL_DOWN) {
+        handle_note(action);
         return;
     }
 

@@ -47,6 +47,8 @@ typedef enum {
     AI_ERROR_MEMORY,
     AI_ERROR_AUDIO,
     AI_ERROR_AUDIO_BUSY,
+    AI_ERROR_STORAGE,      // A voice note could not be written to Flash.
+    AI_ERROR_STORAGE_FULL, // Every voice-note slot holds an undelivered note.
 } ai_error_t;
 
 typedef enum {

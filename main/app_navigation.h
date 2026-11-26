@@ -9,10 +9,12 @@ typedef enum {
     APP_PAGE_AI,
     APP_PAGE_SYSTEM,
     APP_PAGE_SETTINGS,
+    APP_PAGE_NOTE,
 } app_page_t;
 
 typedef enum {
     APP_MENU_AI,
+    APP_MENU_NOTE,
     APP_MENU_SYSTEM,
     APP_MENU_SETTINGS,
     APP_MENU_COUNT,
@@ -42,6 +44,9 @@ typedef enum {
     APP_ACTION_AI_SCROLL_UP,
     APP_ACTION_AI_SCROLL_DOWN,
     APP_ACTION_AI_RESET,
+    APP_ACTION_NOTE_RECORD,
+    APP_ACTION_NOTE_SCROLL_UP,
+    APP_ACTION_NOTE_SCROLL_DOWN,
 } app_action_t;
 
 typedef struct {

@@ -107,6 +107,10 @@ run_static_checks() {
         -Itests/settings_stubs -Itests/demo_stubs -Imain \
         tests/test_app_settings.c -o "${test_dir}/test_app_settings"
     "${test_dir}/test_app_settings"
+    "${CC:-cc}" -std=c11 -Wall -Wextra -Werror \
+        -Itests/note_store_stubs -Imain \
+        tests/test_note_store.c -o "${test_dir}/test_note_store"
+    "${test_dir}/test_note_store"
     "${CC:-cc}" -std=c11 -Wall -Wextra -Werror -Imain \
         tests/test_usb_config_protocol.c main/usb_config_protocol.c \
         -o "${test_dir}/test_usb_config_protocol"

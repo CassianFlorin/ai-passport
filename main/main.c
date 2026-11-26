@@ -9,10 +9,12 @@
 #include "bsp_battery.h"
 #include "bsp_pins.h"      // 错误日志里要打印 BSP_LCD_* 引脚号
 #include "app_audio.h"
+#include "app_clock.h"
 #include "app_settings.h"
 #include "ai_client.h"
 #include "usb_config.h"
 #include "key_guard.h"
+#include "note_store.h"
 #include "personal_home.h"
 #include "esp_log.h"
 #include "esp_sleep.h"
@@ -46,6 +48,9 @@ static void input_task(void *arg) {
         int64_t now = esp_timer_get_time();
         if (now >= next_sample) {
             personal_home_refresh();
+            usb_config_status_t link;
+            usb_config_get_status(&link);
+            app_clock_on_link(link.wifi_state == USB_WIFI_CONNECTED);
             next_sample = now + METRICS_INTERVAL_US;
         }
     }
@@ -120,6 +125,12 @@ void app_main(void) {
     if (settings_err != ESP_OK) {
         ESP_LOGW(TAG, "声音设置读取失败,使用默认音量: %s",
                  esp_err_to_name(settings_err));
+    }
+    // Notes load before the homepage, whose menu shows how many wait for sync.
+    // A failure keeps the stored notes untouched and only disables recording.
+    esp_err_t note_err = note_store_init();
+    if (note_err != ESP_OK) {
+        ESP_LOGW(TAG, "voice notes unavailable: %s", esp_err_to_name(note_err));
     }
     // Both locks exist before the input worker can start a conversation.
     esp_err_t lock_err = app_audio_init();
