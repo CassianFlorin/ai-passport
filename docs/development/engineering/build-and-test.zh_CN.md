@@ -136,7 +136,7 @@ USB 配置的主机检查额外需要 Node.js 20 或更高版本。测试会让�
 统一验证入口：
 
 ```bash
-./tools/validate.sh --static    # 仓库一致性、workflow、文档链接、敏感信息、host tests
+./tools/validate.sh --static    # 仓库一致性、字形覆盖、workflow、文档链接、敏感信息、host tests
 ./tools/validate.sh --firmware  # ESP-IDF build、merge-bin、偏移与当前布局校验
 ./tools/validate.sh             # 完整验证
 ```
